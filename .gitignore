@@ -1,0 +1,32 @@
+# Python cached files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Next.js and web build outputs
+node_modules/
+.next/
+out/
+build/
+.env*.local
+
+# Project temporary and media directories (do not push to Github)
+temp/
+uploads/
+output/
+backups/
+
+# Local workspace state & environment configurations
+workspace_state.json
+.vscode/
+.idea/
+.venv/
+venv/
+ENV/
+dist/
+*.log
+*.zip
+*.png
+*.mp4
+*.wav
+*.mp3

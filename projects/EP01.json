@@ -1,0 +1,47 @@
+{
+  "tracks": [
+    {
+      "id": "track_9xlrgy4y7",
+      "filename": "ผู้หญิงที่ยิ้มทั้งน้ำตา.mp3",
+      "filepath": "/uploads/201a52fa_ผหญงทยมทงนำตา.mp3",
+      "duration": 202.824
+    },
+    {
+      "id": "track_wjnm6t8r2",
+      "filename": "ฝืนยิ้มทั้งน้ำตา.mp3",
+      "filepath": "/uploads/59cbeaa5_ฝนยมทงนำตา.mp3",
+      "duration": 234.024
+    }
+  ],
+  "backgrounds": [
+    {
+      "filename": "test_bg.png",
+      "filepath": "/uploads/2c12770d_test_bg.png"
+    },
+    {
+      "filename": "ChatGPT Image 12 มิ.ย. 2569 19_31_42.png",
+      "filepath": "/uploads/c1825e4b_ChatGPT Image 12 ม.ย. 2569 19_31_42.png"
+    },
+    {
+      "filename": "ChatGPT Image 12 มิ.ย. 2569 21_19_49.png",
+      "filepath": "/uploads/3dadf6b8_ChatGPT Image 12 ม.ย. 2569 21_19_49.png"
+    }
+  ],
+  "active_background": "/uploads/3dadf6b8_ChatGPT Image 12 ม.ย. 2569 21_19_49.png",
+  "settings": {
+    "main_title": "EP.01",
+    "genre": "E2E Test Beats",
+    "description": "เอนด์ทูเอนด์อินทิเกรชันเทสต์รัน",
+    "watermark": "",
+    "resolution": "HD",
+    "fps": 24,
+    "visualizer_style": "Spectrum Bars",
+    "color_theme": "",
+    "custom_color": "#ffffff",
+    "visualizer_opacity": 0.8,
+    "visualizer_height": 0.05,
+    "visualizer_y": 0.85,
+    "font_family": "Noto Sans Thai",
+    "title_font_size": "Small"
+  }
+}
