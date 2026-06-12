@@ -98,3 +98,8 @@ graph TD
 * **Lyrics Subtitles Import**: Support `.srt` and `.ass` file uploads to display timed lyrics/caption animations.
 * **AI Transcription**: Integrate AI speech-to-text models (such as Whisper) to automatically transcribe Thai lyrics from tracks and generate timestamps.
 
+### Phase 4: Browser-Only WebAssembly (WASM) Architecture (ระบบทำงานบนเบราว์เซอร์ 100%)
+* **Serverless Rendering (FFmpeg.wasm)**: Integrate WebAssembly-compiled FFmpeg to compile, decode, and encode the final `.mp4` video directly inside the user's browser sandbox, removing the Python backend dependency entirely.
+* **Client-Side Audio Processing**: Calculate PCM and FFT frequency analysis directly in Javascript using Web Audio API's `OfflineAudioContext` for offline rendering.
+* **Zero-Installation Setup**: Allow users to upload tracks, choose settings, render the visualizer, and download the video directly from the browser tab without running any local servers.
+
