@@ -153,7 +153,9 @@ export default function Home() {
             font_family: fontFamily,
             title_font_size: titleFontSize,
             ken_burns: kenBurns,
-            ken_burns_speed: kenBurnsSpeed
+            ken_burns_speed: kenBurnsSpeed,
+            bgs_per_track: bgsPerTrack,
+            selected_bg_paths: selectedBgPaths
           }
         };
         await musicApi.saveState(stateObj);
@@ -168,7 +170,8 @@ export default function Home() {
   }, [
     tracks, backgrounds, activeBg, mainTitle, genreText, descText, watermark,
     resolution, fps, visStyle, colorTheme, customColor, visOpacity, visHeight,
-    visYPos, fontFamily, titleFontSize, kenBurns, kenBurnsSpeed
+    visYPos, fontFamily, titleFontSize, kenBurns, kenBurnsSpeed, bgsPerTrack,
+    selectedBgPaths
   ]);
 
   const getCurrentTrackBackground = () => {
@@ -221,7 +224,13 @@ export default function Home() {
         if (data.tracks) setTracks(data.tracks);
         if (data.backgrounds) {
           setBackgrounds(data.backgrounds);
-          setSelectedBgPaths(data.backgrounds.map(bg => bg.filepath));
+          // Restore selectedBgPaths from settings if present, otherwise select all
+          const s = data.settings;
+          if (s && s.selected_bg_paths !== undefined) {
+            setSelectedBgPaths(s.selected_bg_paths);
+          } else {
+            setSelectedBgPaths(data.backgrounds.map(bg => bg.filepath));
+          }
         }
         if (data.active_background) setActiveBg(data.active_background);
         if (data.settings) {
@@ -242,6 +251,7 @@ export default function Home() {
           if (s.title_font_size !== undefined) setTitleFontSize(s.title_font_size);
           if (s.ken_burns !== undefined) setKenBurns(s.ken_burns);
           if (s.ken_burns_speed !== undefined) setKenBurnsSpeed(s.ken_burns_speed);
+          if (s.bgs_per_track !== undefined) setBgsPerTrack(s.bgs_per_track);
         }
       } catch (err) {
         console.error("Failed to load workspace state:", err);
@@ -316,7 +326,13 @@ export default function Home() {
       if (data.tracks) setTracks(data.tracks);
       if (data.backgrounds) {
         setBackgrounds(data.backgrounds);
-        setSelectedBgPaths(data.backgrounds.map(bg => bg.filepath));
+        // Restore selectedBgPaths from settings if present, otherwise select all
+        const s = data.settings;
+        if (s && s.selected_bg_paths !== undefined) {
+          setSelectedBgPaths(s.selected_bg_paths);
+        } else {
+          setSelectedBgPaths(data.backgrounds.map(bg => bg.filepath));
+        }
       }
       if (data.active_background) setActiveBg(data.active_background);
       if (data.settings) {
@@ -337,6 +353,7 @@ export default function Home() {
         if (s.title_font_size !== undefined) setTitleFontSize(s.title_font_size);
         if (s.ken_burns !== undefined) setKenBurns(s.ken_burns);
         if (s.ken_burns_speed !== undefined) setKenBurnsSpeed(s.ken_burns_speed);
+        if (s.bgs_per_track !== undefined) setBgsPerTrack(s.bgs_per_track);
       }
       setShowProjectsModal(false);
       alert(`โหลดโปรเจค "${name}" สำเร็จ!`);
@@ -384,8 +401,8 @@ export default function Home() {
           title_font_size: titleFontSize,
           ken_burns: kenBurns,
           ken_burns_speed: kenBurnsSpeed,
-          ken_burns: kenBurns,
-          ken_burns_speed: kenBurnsSpeed
+          bgs_per_track: bgsPerTrack,
+          selected_bg_paths: selectedBgPaths
         }
       };
       await musicApi.saveState(stateObj);
