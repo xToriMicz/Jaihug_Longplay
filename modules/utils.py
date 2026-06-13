@@ -124,9 +124,9 @@ def get_font(text: str, bold: bool, size: int, fonts_dir: str, font_family: str 
     if not font_family or font_family not in supported_fonts:
         font_family = "Inter"
         
-    # Fallback to Sarabun for Thai characters if Inter is selected
+    # Fallback to IBM Plex Sans Thai for Thai characters if Inter is selected
     if font_family == "Inter" and contains_thai(text):
-        font_family = "Sarabun"
+        font_family = "IBM Plex Sans Thai"
         
     # Fallback to IBM Plex Sans Thai for Latin characters if Noto Sans Thai is selected
     if font_family == "Noto Sans Thai" and contains_latin(text):
