@@ -99,6 +99,12 @@ def contains_thai(text: str) -> bool:
     """
     return any('\u0e00' <= char <= '\u0e7f' for char in text)
 
+def contains_latin(text: str) -> bool:
+    """
+    Checks if the text contains any Latin/English alphabetical characters (A-Z, a-z).
+    """
+    return any(('a' <= char <= 'z') or ('A' <= char <= 'Z') for char in text)
+
 def get_font(text: str, bold: bool, size: int, fonts_dir: str, font_family: str = "Inter"):
     """
     Loads font based on font_family selection, falling back to Noto Sans Thai 
@@ -121,6 +127,10 @@ def get_font(text: str, bold: bool, size: int, fonts_dir: str, font_family: str 
     # Fallback to Sarabun for Thai characters if Inter is selected
     if font_family == "Inter" and contains_thai(text):
         font_family = "Sarabun"
+        
+    # Fallback to IBM Plex Sans Thai for Latin characters if Noto Sans Thai is selected
+    if font_family == "Noto Sans Thai" and contains_latin(text):
+        font_family = "IBM Plex Sans Thai"
         
     bold_file, regular_file = supported_fonts[font_family]
     font_name = bold_file if bold else regular_file
