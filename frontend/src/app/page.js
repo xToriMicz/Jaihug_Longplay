@@ -129,10 +129,12 @@ export default function Home() {
 
   // Debounced Auto-Save
   useEffect(() => {
-    if (isInitialLoad.current) return;
+    if (isInitialLoad.current || isSaving || isUploading || exportState.status === 'processing') {
+      return;
+    }
 
-    setAutoSaveStatus("Saving...");
     const timer = setTimeout(async () => {
+      setAutoSaveStatus("Saving...");
       try {
         const stateObj = {
           tracks,
@@ -173,7 +175,7 @@ export default function Home() {
     tracks, backgrounds, activeBg, mainTitle, genreText, descText, watermark,
     resolution, fps, visStyle, colorTheme, customColor, visOpacity, visHeight,
     visYPos, fontFamily, titleFontSize, kenBurns, kenBurnsSpeed, bgFilter, bgsPerTrack,
-    selectedBgPaths
+    selectedBgPaths, isSaving, isUploading, exportState.status
   ]);
 
   const getCurrentTrackBackground = () => {
