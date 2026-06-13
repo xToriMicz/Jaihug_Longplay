@@ -188,7 +188,7 @@ def get_ffmpeg_visualizer_args(
     width, height = resolution
     color_rgb = get_color_rgb(color_theme)
     color_hex = f"0x{color_rgb[0]:02x}{color_rgb[1]:02x}{color_rgb[2]:02x}"
-    filter_str = get_filter_string(background_filter)
+    filter_str = get_filter_string(background_filter, width, height)
     
     # Position and sizing for visualizers: 
     # Width = 60% of video width, Height = 150px, placed at the bottom 15% of the screen
@@ -360,7 +360,7 @@ def render_custom_visualizer(
     width, height = resolution
     style_lower = style.lower()
     color_rgb = get_color_rgb(color_theme)
-    filter_str = get_filter_string(background_filter)
+    filter_str = get_filter_string(background_filter, width, height)
     
     # 1. Extract audio sample rate and PCM details via FFmpeg pipe
     sample_rate = 44100  # Match standard sample rate for identical frequency range

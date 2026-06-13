@@ -70,8 +70,6 @@ def generate_background_segment(
     resolution: Tuple[int, int],
     fps: int,
     output_path: str,
-    ken_burns: bool = True,
-    ken_burns_speed: str = "normal",
     background_filter: str = "none"
 ) -> bool:
     """
@@ -81,14 +79,11 @@ def generate_background_segment(
     """
     width, height = resolution
     is_img = input_path.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.bmp'))
-    filter_str = get_filter_string(background_filter)
+    filter_str = get_filter_string(background_filter, width, height)
     
     if is_img:
-        # Determine chunk cycle length
-        if ken_burns:
-            cycle_len = 45.0 if ken_burns_speed == "low" else 30.0
-        else:
-            cycle_len = 5.0
+        # Determine chunk cycle length (original static logic uses 5.0 seconds)
+        cycle_len = 5.0
             
         full_chunks = int(duration // cycle_len)
         remainder = duration % cycle_len
@@ -108,19 +103,8 @@ def generate_background_segment(
             chunk_final_path = os.path.join(temp_dir, f"chunk_final_{os.getpid()}_{int(time.time()*1000)}.mp4")
             
             def render_chunk(chunk_dur: float, chunk_out_path: str) -> bool:
-                if ken_burns:
-                    zoom_amount = 0.08 if ken_burns_speed == "low" else 0.12
-                    c_len = 45 if ken_burns_speed == "low" else 30
-                    vf = (
-                        f"scale={width*2}:{height*2}:force_original_aspect_ratio=decrease,"
-                        f"pad={width*2}:{height*2}:(ow-iw)/2:(oh-ih)/2,"
-                        f"zoompan=z='1.0+{zoom_amount}*(0.5+0.5*sin(2*3.14159265*on/({c_len}*{fps})))':"
-                        f"x='iw/2-(iw/zoom)/2':y='ih/2-(ih/zoom)/2':d=1:s={width}x{height}:fps={fps}"
-                    )
-                    tune_args = []
-                else:
-                    vf = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
-                    tune_args = ["-tune", "stillimage"]
+                vf = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
+                tune_args = ["-tune", "stillimage"]
                     
                 if filter_str:
                     vf = f"{vf},{filter_str}"
@@ -190,19 +174,8 @@ def generate_background_segment(
                         logger.warning(f"Could not clean up temp file {f}: {e}")
         else:
             # Traditional encoding for short durations
-            if ken_burns:
-                zoom_amount = 0.08 if ken_burns_speed == "low" else 0.12
-                cycle_len_val = 45 if ken_burns_speed == "low" else 30
-                vf = (
-                    f"scale={width*2}:{height*2}:force_original_aspect_ratio=decrease,"
-                    f"pad={width*2}:{height*2}:(ow-iw)/2:(oh-ih)/2,"
-                    f"zoompan=z='1.0+{zoom_amount}*(0.5+0.5*sin(2*3.14159265*on/({cycle_len_val}*{fps})))':"
-                    f"x='iw/2-(iw/zoom)/2':y='ih/2-(ih/zoom)/2':d=1:s={width}x{height}:fps={fps}"
-                )
-                tune_args = []
-            else:
-                vf = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
-                tune_args = ["-tune", "stillimage"]
+            vf = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
+            tune_args = ["-tune", "stillimage"]
 
             if filter_str:
                 vf = f"{vf},{filter_str}"
@@ -275,8 +248,6 @@ def create_longplay_video(
     track_names: List[str] = None,
     title_font_size: str = "Medium",
     tracks_data: List[Dict[str, Any]] = None,
-    ken_burns: bool = True,
-    ken_burns_speed: str = "normal",
     background_filter: str = "none"
 ) -> str:
     """
@@ -311,7 +282,7 @@ def create_longplay_video(
                 break
                 
     has_filter = background_filter and background_filter.lower() != "none"
-    should_compile_bg = has_custom_backgrounds or (is_image and ken_burns) or has_filter
+    should_compile_bg = has_custom_backgrounds or has_filter
  
     if should_compile_bg:
         temp_dir = os.path.abspath(os.path.join(os.path.dirname(output_path), "..", "temp"))
@@ -336,27 +307,27 @@ def create_longplay_video(
                     for sub_idx, bg_item in enumerate(bg_val):
                         bg_path = bg_item if bg_item else background_media
                         seg_out = os.path.join(temp_dir, f"bg_seg_{i}_{sub_idx}_{os.getpid()}.mp4")
-                        success = generate_background_segment(bg_path, dur_per_segment, resolution, fps, seg_out, ken_burns, ken_burns_speed, background_filter)
+                        success = generate_background_segment(bg_path, dur_per_segment, resolution, fps, seg_out, background_filter)
                         if success and os.path.exists(seg_out):
                             segment_files.append(seg_out)
                             temp_files.append(seg_out)
                         else:
                             logger.warning(f"Could not generate slideshow segment, falling back to global bg.")
                             fallback_out = os.path.join(temp_dir, f"bg_seg_{i}_{sub_idx}_fb_{os.getpid()}.mp4")
-                            generate_background_segment(background_media, dur_per_segment, resolution, fps, fallback_out, ken_burns, ken_burns_speed, background_filter)
+                            generate_background_segment(background_media, dur_per_segment, resolution, fps, fallback_out, background_filter)
                             segment_files.append(fallback_out)
                             temp_files.append(fallback_out)
                 else:
                     bg_path = bg_val if bg_val else background_media
                     seg_out = os.path.join(temp_dir, f"bg_seg_{i}_{os.getpid()}.mp4")
-                    success = generate_background_segment(bg_path, track_dur, resolution, fps, seg_out, ken_burns, ken_burns_speed, background_filter)
+                    success = generate_background_segment(bg_path, track_dur, resolution, fps, seg_out, background_filter)
                     if success and os.path.exists(seg_out):
                         segment_files.append(seg_out)
                         temp_files.append(seg_out)
                     else:
                         logger.warning(f"Could not generate track segment, falling back to global bg.")
                         fallback_out = os.path.join(temp_dir, f"bg_seg_{i}_fb_{os.getpid()}.mp4")
-                        generate_background_segment(background_media, track_dur, resolution, fps, fallback_out, ken_burns, ken_burns_speed, background_filter)
+                        generate_background_segment(background_media, track_dur, resolution, fps, fallback_out, background_filter)
                         segment_files.append(fallback_out)
                         temp_files.append(fallback_out)
                         
@@ -390,11 +361,11 @@ def create_longplay_video(
                 else:
                     logger.error(f"Concat failed to create master background: {stderr}. Using global background as fallback.")
         else:
-            logger.info("Ken Burns or background filter enabled on global image background. Pre-compiling master background video...")
-            master_bg_path = os.path.join(temp_dir, f"master_bg_kb_{os.getpid()}.mp4")
+            logger.info("Background filter enabled on global image background. Pre-compiling master background video...")
+            master_bg_path = os.path.join(temp_dir, f"master_bg_filter_{os.getpid()}.mp4")
             success = generate_background_segment(
                 background_media, total_duration, resolution, fps, master_bg_path, 
-                ken_burns=ken_burns, ken_burns_speed=ken_burns_speed, background_filter=background_filter
+                background_filter=background_filter
             )
             if success and os.path.exists(master_bg_path):
                 background_media = master_bg_path

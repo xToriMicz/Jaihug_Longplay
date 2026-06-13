@@ -18,7 +18,7 @@ class FilterType(str, Enum):
     VIGNETTE_HEAVY = "vignette_heavy"
     NEGATE = "negate"
 
-def get_filter_string(filter_type: str) -> str:
+def get_filter_string(filter_type: str, width: int = None, height: int = None) -> str:
     """
     Get FFmpeg filter string for a filter type.
     """
@@ -27,6 +27,10 @@ def get_filter_string(filter_type: str) -> str:
     
     # Normalize
     ft = filter_type.lower()
+    
+    aspect_val = ""
+    if width and height:
+        aspect_val = f":aspect={width}/{height}"
     
     filter_map = {
         "none": "",
@@ -42,8 +46,8 @@ def get_filter_string(filter_type: str) -> str:
         "vibrant": "eq=saturation=1.6:contrast=1.15",
         "dreamy": "gblur=sigma=1.5,eq=brightness=0.1:saturation=1.1,colorbalance=rs=0.1:gs=0.05:bs=0.1",
         "blur": "boxblur=2:1",
-        "vignette": "vignette=angle=PI/4:mode=backward",
-        "vignette_heavy": "vignette=angle=PI/3:mode=backward",
+        "vignette": f"vignette=angle=PI/4:mode=forward{aspect_val}",
+        "vignette_heavy": f"vignette=angle=PI/3:mode=forward{aspect_val}",
         "negate": "negate",
     }
     

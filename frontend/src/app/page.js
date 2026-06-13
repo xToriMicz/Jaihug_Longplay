@@ -26,7 +26,7 @@ export default function Home() {
   const [visStyle, setVisStyle] = useState('Spectrum Bars');
   const [colorTheme, setColorTheme] = useState('Lo-fi / Chill');
   const [customColor, setCustomColor] = useState('');
-  const [kenBurns, setKenBurns] = useState(true);
+  const [kenBurns, setKenBurns] = useState(false);
   const [kenBurnsSpeed, setKenBurnsSpeed] = useState('normal'); // 'low' or 'normal'
   const [bgFilter, setBgFilter] = useState('none');
   const [visOpacity, setVisOpacity] = useState(0.8);
@@ -912,11 +912,7 @@ export default function Home() {
                     autoPlay 
                     loop 
                     muted 
-                    className={`absolute inset-0 w-full h-full object-cover z-0 ${
-                      kenBurns 
-                        ? (kenBurnsSpeed === 'low' ? 'animate-kenburns-low' : 'animate-kenburns-normal') 
-                        : ''
-                    }`}
+                    className="absolute inset-0 w-full h-full object-cover z-0"
                     style={{ filter: getCssFilter(bgFilter) }}
                   />
                 ) : (
@@ -924,11 +920,7 @@ export default function Home() {
                     key={currentBg}
                     src={musicApi.getBaseUrl() + currentBg} 
                     alt="Video background preview" 
-                    className={`absolute inset-0 w-full h-full object-cover z-0 ${
-                      kenBurns 
-                        ? (kenBurnsSpeed === 'low' ? 'animate-kenburns-low' : 'animate-kenburns-normal') 
-                        : ''
-                    }`}
+                    className="absolute inset-0 w-full h-full object-cover z-0"
                     style={{ filter: getCssFilter(bgFilter) }}
                   />
                 )
@@ -945,9 +937,9 @@ export default function Home() {
                   className="absolute inset-0 z-10 pointer-events-none"
                   style={{
                     background: bgFilter === 'vignette' 
-                      ? 'radial-gradient(circle, transparent 40%, rgba(0,0,0,0.65) 95%)' 
+                      ? 'radial-gradient(ellipse, transparent 40%, rgba(0,0,0,0.65) 95%)' 
                       : bgFilter === 'vignette_heavy'
-                      ? 'radial-gradient(circle, transparent 25%, rgba(0,0,0,0.85) 90%)'
+                      ? 'radial-gradient(ellipse, transparent 25%, rgba(0,0,0,0.85) 90%)'
                       : 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.3) 100%)'
                   }}
                 />
@@ -1027,28 +1019,6 @@ export default function Home() {
             </div>
             
             <div className="flex items-center gap-6">
-              {/* Ken Burns animation toggle */}
-              <div className="flex items-center gap-3">
-                <label htmlFor="kenBurnsToggle" className="text-xs text-white/70">Ken Burns</label>
-                <button 
-                  id="kenBurnsToggle"
-                  onClick={() => setKenBurns(!kenBurns)}
-                  className={`w-10 h-6 rounded-full transition-all relative p-0.5 cursor-pointer ${kenBurns ? 'bg-[#ff007a]' : 'bg-white/10'}`}
-                >
-                  <div className={`w-5 h-5 rounded-full bg-white transition-all shadow-md ${kenBurns ? 'translate-x-4' : 'translate-x-0'}`} />
-                </button>
-                {kenBurns && (
-                  <select
-                    value={kenBurnsSpeed}
-                    onChange={(e) => setKenBurnsSpeed(e.target.value)}
-                    className="px-2 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-white cursor-pointer hover:bg-white/10 transition-all focus:outline-none"
-                  >
-                    <option value="normal" className="bg-[#181922] text-white">Normal</option>
-                    <option value="low" className="bg-[#181922] text-white">Low Speed</option>
-                  </select>
-                )}
-              </div>
-
               {/* Background Filter Select */}
               <div className="flex items-center gap-2">
                 <label htmlFor="bgFilterSelect" className="text-xs text-white/70">Filter</label>

@@ -92,7 +92,7 @@ def load_default_state() -> Dict[str, Any]:
             "visualizer_y": 0.92,
             "font_family": "Inter",
             "title_font_size": "Medium",
-            "ken_burns": True,
+            "ken_burns": False,
             "ken_burns_speed": "normal",
             "background_filter": "none",
             "bgs_per_track": 1,
@@ -281,8 +281,6 @@ def run_export_pipeline(state_data: Dict[str, Any]):
             track_names=track_names,
             title_font_size=settings.get("title_font_size", "Medium"),
             tracks_data=processed_tracks,
-            ken_burns=settings.get("ken_burns", True),
-            ken_burns_speed=settings.get("ken_burns_speed", "normal"),
             background_filter=settings.get("background_filter", "none")
         )
         
