@@ -111,7 +111,7 @@ def create_longplay_video(
     # 1. Merge audio files first
     temp_audio = os.path.join(os.path.dirname(output_path), f"merged_audio_{os.getpid()}.mp3")
     logger.info("Step 1: Merging audio tracks...")
-    merged_audio_path = merge_audio_files(audio_files, temp_audio)
+    merged_audio_path = merge_audio_files(audio_files, temp_audio, track_names=track_names)
     temp_files.append(merged_audio_path)
     
     # Rename timeline and songlist from temp_audio name to output_path name

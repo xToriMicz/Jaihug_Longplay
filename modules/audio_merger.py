@@ -2,6 +2,8 @@ import os
 import subprocess
 import json
 import logging
+import re
+from datetime import datetime
 from typing import List, Tuple
 from modules.utils import safe_path_for_ffmpeg, run_command
 
@@ -37,7 +39,7 @@ def get_audio_info(audio_file: str) -> Tuple[float, int, int]:
     
     return 0.0, 44100, 2
 
-def generate_timeline_files(audio_files: List[str], output_audio_path: str):
+def generate_timeline_files(audio_files: List[str], output_audio_path: str, track_names: List[str] = None):
     """
     Generates Timeline.txt and SongList.txt side-by-side with the output file.
     """
@@ -47,7 +49,12 @@ def generate_timeline_files(audio_files: List[str], output_audio_path: str):
     
     for idx, filepath in enumerate(audio_files, 1):
         duration, _, _ = get_audio_info(filepath)
-        filename = os.path.splitext(os.path.basename(filepath))[0]
+        if track_names and idx - 1 < len(track_names):
+            filename = track_names[idx - 1]
+        else:
+            filename = os.path.splitext(os.path.basename(filepath))[0]
+            # Strip 8-character hex UUID prefix followed by underscore (e.g. 201a52fa_)
+            filename = re.sub(r'^[0-9a-fA-F]{8}_', '', filename)
         
         # Format Start Time
         hours = int(current_seconds // 3600)
@@ -69,11 +76,14 @@ def generate_timeline_files(audio_files: List[str], output_audio_path: str):
     tot_s = int(current_seconds % 60)
     total_duration_str = f"{tot_h}:{tot_m:02d}:{tot_s:02d}" if tot_h > 0 else f"{tot_m}:{tot_s:02d}"
 
+    created_at_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     # Content for Timeline
     timeline_content = "🎵 Timeline ของเพลงที่รวมกัน\n" + "=" * 50 + "\n\n"
     timeline_content += "\n".join(timeline_entries)
     timeline_content += f"\n\n📊 รวมทั้งหมด: {len(audio_files)} เพลง\n"
     timeline_content += f"⏱️ ความยาวรวม: {total_duration_str}\n"
+    timeline_content += f"📅 สร้างเมื่อ: {created_at_str}\n"
     
     timeline_path = os.path.splitext(output_audio_path)[0] + "_Timeline.txt"
     with open(timeline_path, "w", encoding="utf-8") as f:
@@ -83,6 +93,7 @@ def generate_timeline_files(audio_files: List[str], output_audio_path: str):
     song_list_content = "🎵 รายชื่อเพลง (Song List)\n" + "=" * 50 + "\n\n"
     song_list_content += "\n".join(song_list_entries)
     song_list_content += f"\n\n📊 รวมทั้งหมด: {len(audio_files)} เพลง\n"
+    song_list_content += f"📅 สร้างเมื่อ: {created_at_str}\n"
     
     song_list_path = os.path.splitext(output_audio_path)[0] + "_SongList.txt"
     with open(song_list_path, "w", encoding="utf-8") as f:
@@ -90,7 +101,7 @@ def generate_timeline_files(audio_files: List[str], output_audio_path: str):
         
     logger.info(f"Timeline/SongList generated at: {timeline_path}")
 
-def merge_audio_files(audio_files: List[str], output_path: str) -> str:
+def merge_audio_files(audio_files: List[str], output_path: str, track_names: List[str] = None) -> str:
     """
     Merges multiple audio files.
     Tries fast copy concat first if codecs, formats, and output format match,
@@ -100,7 +111,7 @@ def merge_audio_files(audio_files: List[str], output_path: str) -> str:
         raise ValueError("No audio files provided to merge")
         
     # Generate Timeline and Song List text files
-    generate_timeline_files(audio_files, output_path)
+    generate_timeline_files(audio_files, output_path, track_names)
     
     # Analyze files
     formats = []

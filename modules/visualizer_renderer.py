@@ -345,7 +345,7 @@ def render_custom_visualizer(
     color_rgb = get_color_rgb(color_theme)
     
     # 1. Extract audio sample rate and PCM details via FFmpeg pipe
-    sample_rate = 22050  # Downsample for faster FFT processing
+    sample_rate = 44100  # Match standard sample rate for identical frequency range
     samples_per_frame = int(sample_rate / fps)
     
     logger.info(f"Extracting PCM from {audio_path}...")

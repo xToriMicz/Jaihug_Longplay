@@ -3,6 +3,7 @@ import uuid
 import json
 import logging
 import threading
+import unicodedata
 from typing import List, Dict, Any
 from fastapi import FastAPI, File, UploadFile, Form, BackgroundTasks, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -122,7 +123,7 @@ async def upload_file(file: UploadFile = File(...), file_type: str = Form(...)):
     """
     # Create clean name
     original_name = file.filename
-    clean_name = "".join(c for c in original_name if c.isalnum() or c in (".", "_", "-", " ")).strip()
+    clean_name = "".join(c for c in original_name if c.isalnum() or unicodedata.category(c).startswith('M') or c in (".", "_", "-", " ", "(", ")", "[", "]", ",", "&")).strip()
     # Add unique prefix to avoid collisions
     unique_filename = f"{uuid.uuid4().hex[:8]}_{clean_name}"
     file_path = os.path.join(UPLOAD_DIR, unique_filename)
@@ -285,7 +286,7 @@ def start_export(background_tasks: BackgroundTasks, project_name: str = None):
             
     # Load state data to pass to thread
     if project_name:
-        clean_name = "".join(c for c in project_name if c.isalnum() or c in ("-", "_", " ")).strip()
+        clean_name = "".join(c for c in project_name if c.isalnum() or unicodedata.category(c).startswith('M') or c in ("-", "_", " ")).strip()
         file_path = os.path.join(BASE_DIR, "projects", f"{clean_name}.json")
         if not os.path.exists(file_path):
              raise HTTPException(status_code=404, detail="Project not found")
@@ -332,7 +333,7 @@ def list_projects():
 
 @app.post("/api/projects/{name}")
 def save_project(name: str, state: EditorState):
-    clean_name = "".join(c for c in name if c.isalnum() or c in ("-", "_", " ")).strip()
+    clean_name = "".join(c for c in name if c.isalnum() or unicodedata.category(c).startswith('M') or c in ("-", "_", " ")).strip()
     if not clean_name:
         raise HTTPException(status_code=400, detail="Invalid project name")
     projects_dir = os.path.join(BASE_DIR, "projects")
@@ -351,7 +352,7 @@ def save_project(name: str, state: EditorState):
 
 @app.get("/api/projects/{name}")
 def load_project(name: str):
-    clean_name = "".join(c for c in name if c.isalnum() or c in ("-", "_", " ")).strip()
+    clean_name = "".join(c for c in name if c.isalnum() or unicodedata.category(c).startswith('M') or c in ("-", "_", " ")).strip()
     file_path = os.path.join(BASE_DIR, "projects", f"{clean_name}.json")
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Project not found")
@@ -368,7 +369,7 @@ def load_project(name: str):
 
 @app.delete("/api/projects/{name}")
 def delete_project(name: str):
-    clean_name = "".join(c for c in name if c.isalnum() or c in ("-", "_", " ")).strip()
+    clean_name = "".join(c for c in name if c.isalnum() or unicodedata.category(c).startswith('M') or c in ("-", "_", " ")).strip()
     file_path = os.path.join(BASE_DIR, "projects", f"{clean_name}.json")
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Project not found")
