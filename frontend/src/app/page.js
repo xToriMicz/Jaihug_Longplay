@@ -730,6 +730,8 @@ export default function Home() {
     }
   };
 
+  const currentBg = getCurrentTrackBackground();
+
   return (
     <div className="flex-1 flex flex-row min-h-screen bg-[#0a0b0e] text-[#ededed] overflow-hidden select-none">
       
@@ -902,10 +904,11 @@ export default function Home() {
               style={{ containerType: 'inline-size' }}
             >
               {/* Background Layer with Optional Ken Burns Animation */}
-              {activeBg ? (
-                activeBg.toLowerCase().endsWith('.mp4') || activeBg.includes('_video_') ? (
+              {currentBg ? (
+                currentBg.toLowerCase().endsWith('.mp4') || currentBg.includes('_video_') ? (
                   <video 
-                    src={musicApi.getBaseUrl() + activeBg} 
+                    key={currentBg}
+                    src={musicApi.getBaseUrl() + currentBg} 
                     autoPlay 
                     loop 
                     muted 
@@ -918,7 +921,8 @@ export default function Home() {
                   />
                 ) : (
                   <img 
-                    src={musicApi.getBaseUrl() + activeBg} 
+                    key={currentBg}
+                    src={musicApi.getBaseUrl() + currentBg} 
                     alt="Video background preview" 
                     className={`absolute inset-0 w-full h-full object-cover z-0 ${
                       kenBurns 
@@ -936,7 +940,7 @@ export default function Home() {
               )}
               
               {/* Ambient Dark Overlay to ensure readability */}
-              {activeBg && (
+              {currentBg && (
                 <div 
                   className="absolute inset-0 z-10 pointer-events-none"
                   style={{
@@ -963,7 +967,7 @@ export default function Home() {
                 className="absolute left-0 right-0 z-30 flex flex-col items-center select-none pointer-events-none"
                 style={{ top: `${(visYPos + 0.025) * 100}%` }}
               >
-                {tracks.length > 0 && activeBg && (
+                {tracks.length > 0 && currentBg && (
                   <div 
                     className="text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] font-semibold tracking-wide"
                     style={{
