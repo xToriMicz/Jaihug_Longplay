@@ -51,7 +51,13 @@ graph TD
 
 ## 📈 Version Changelog (Version Log)
 
-### `v1.3.0` — 80-Bar Independent Equalizer & FFT Alignment (Current)
+### `v1.4.0` — Vertical Format, Smart Background Mapping & Ken Burns Calibration (Current)
+* **Vertical Video Support (9:16)**: Added vertical template resolutions (`Vertical HD` 1080x1920, `Vertical 2K` 1440x2560, `Vertical 4K` 2160x3840) formatted for YouTube Shorts, TikTok, and Reels. Implemented container query typography scaling (`cqw`) to prevent text overflow.
+* **Smart Background Mapping & Slideshows**: Enabled custom per-track backgrounds (1 background per track) and multi-image slideshow cycles (N backgrounds per track). The background compiler handles short videos by native stream-looping and concatenates segments with zero-overhead fallback optimization.
+* **Watermark & Title Centering**: Repositioned the watermark text from the bottom-left to be directly appended to the centered track title (`Song Name - Watermark`) below the visualizer.
+* **Ken Burns Calibration**: Added speed options (Normal vs Low Speed). Solved browser keyframe delays using separate class animations, and tuned the Low Speed mode to a smooth, visible `1.08x` scale over a `45s` cycle length.
+
+### `v1.3.0` — 80-Bar Independent Equalizer & FFT Alignment
 * **Independent 80-Bar Mapping**: Shifted "Spectrum Bars" from mirrored dome mapping to an independent 80-bar layout representing a real graphic equalizer. Frequencies now flow logically from low (bass) on the left to high (treble) on the right.
 * **Frequency Range Calibration**: Solved the visual "stiff/dull" movement in the exported video. Extended the backend's active frequency cutoff from 1.9kHz up to **~13.8kHz** (capturing mid-vocals and high percussion/cymbals details to match the frontend preview).
 * **Sensitivity Alignment**: Matched Web Audio API default dynamic range mapping by using **`[-90.0, -30.0]` dB** range instead of `[-75.0, -15.0]`, allowing soft frequency changes to bounce highly and dynamically.
@@ -80,12 +86,11 @@ graph TD
 ## 🚀 Future Development Roadmap (แผนการพัฒนาตามเฟส)
 
 ### Phase 1: Advanced Backgrounds & Layouts (ระบบพื้นหลังและขนาดแนวตั้ง)
-* **Vertical Video Support (9:16)**: Add 1080x1920 resolution templates tailored for YouTube Shorts, TikTok, and Instagram Reels (optimized positions for visualizer bars and titles).
-* **Video Backgrounds**: Support `.mp4` video files as background media instead of static images.
+* **Vertical Video Support (9:16)** [DONE] — Templates for 1080x1920, 1440x2560, and 2160x3840 with dynamic typography scaling.
+* **Video Backgrounds** [DONE] — Supports `.mp4` video files as background media with automatic scaling/letterboxing.
+* **Smart Background Mapping** [DONE] — Assign unique background media (images or videos) to specific tracks, or multiple images as a slideshow sequence within a track.
+* **Ken Burns Zoom Settings & Calibration** [DONE] — Normal and Low speed zoom toggle on both previewer (class-based CSS) and exporter (sinusoidal FFmpeg zoompan).
 * **Seamless Video Looping**: Automatically loop short background videos to match the playlist duration using FFmpeg filters (`xfade` for smooth crossfading transitions or reverse/ping-pong looping for seamless visual continuation).
-* **Smart Background Mapping**:
-  * **1 Background / 1 Song**: Assign a unique image or video to each track.
-  * **N Backgrounds / 1 Song (Slideshow)**: Cycle multiple images within a single song.
 
 ### Phase 2: Visualizer Aesthetics & Rendering Optimization (เอฟเฟกต์และการเรนเดอร์)
 * **Gradient Visualizer Bars**: Allow customizable linear/radial color gradients on equalizer bars.

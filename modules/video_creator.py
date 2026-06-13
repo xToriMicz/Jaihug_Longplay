@@ -32,25 +32,9 @@ def create_static_text_overlay(
     font_genre = get_font(genre or "", False, int(height * 0.025), fonts_dir, font_family)
     font_title = get_font(main_title or "", True, int(height * 0.065), fonts_dir, font_family)
     font_desc = get_font(description or "", False, int(height * 0.022), fonts_dir, font_family)
-    font_watermark = get_font(watermark or "", True, int(height * 0.035), fonts_dir, font_family)
-
     
     # Text positions (percentages of width/height)
     margin_x = int(width * 0.08)
-    
-    # Draw Watermark logo/text at bottom left
-    if watermark:
-        if contains_thai(watermark):
-            render_thai_clean(draw, (margin_x, int(height * 0.78)), watermark, font_watermark, (255, 255, 255, 240), stroke_width=2, stroke_fill=(0, 0, 0, 255))
-        else:
-            draw.text(
-                (margin_x, int(height * 0.78)),
-                watermark,
-                font=font_watermark,
-                fill=(255, 255, 255, 240),
-                stroke_width=2,
-                stroke_fill=(0, 0, 0, 255)
-            )
         
     # Save overlay image
     temp_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "temp"))
@@ -79,6 +63,72 @@ def detect_encoder() -> str:
     logger.info("Using standard CPU encoder (libx264).")
     return "libx264"
 
+def generate_background_segment(
+    input_path: str,
+    duration: float,
+    resolution: Tuple[int, int],
+    fps: int,
+    output_path: str,
+    ken_burns: bool = True,
+    ken_burns_speed: str = "normal"
+) -> bool:
+    """
+    Generates a single background video segment matching the target resolution, fps, and duration.
+    Strips audio and uses ultrafast preset for speed.
+    """
+    width, height = resolution
+    is_img = input_path.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.bmp'))
+    
+    if is_img:
+        if ken_burns:
+            zoom_amount = 0.08 if ken_burns_speed == "low" else 0.12
+            cycle_len = 45 if ken_burns_speed == "low" else 30
+            vf = (
+                f"scale={width*2}:{height*2}:force_original_aspect_ratio=decrease,"
+                f"pad={width*2}:{height*2}:(ow-iw)/2:(oh-ih)/2,"
+                f"zoompan=z='1.0+{zoom_amount}*(0.5+0.5*sin(2*3.14159265*on/({cycle_len}*{fps})))':"
+                f"x='iw/2-(iw/zoom)/2':y='ih/2-(ih/zoom)/2':d=1:s={width}x{height}:fps={fps}"
+            )
+            tune_args = []
+        else:
+            vf = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
+            tune_args = ["-tune", "stillimage"]
+
+        cmd = [
+            "ffmpeg", "-y",
+            "-loop", "1",
+            "-t", f"{duration:.3f}",
+            "-i", input_path,
+            "-vf", vf,
+            "-c:v", "libx264",
+            "-preset", "ultrafast"
+        ] + tune_args + [
+            "-pix_fmt", "yuv420p",
+            "-r", str(fps),
+            "-an",
+            output_path
+        ]
+    else:
+        cmd = [
+            "ffmpeg", "-y",
+            "-stream_loop", "-1",
+            "-i", input_path,
+            "-vf", f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-pix_fmt", "yuv420p",
+            "-r", str(fps),
+            "-t", f"{duration:.3f}",
+            "-an",
+            output_path
+        ]
+        
+    returncode, stdout, stderr = run_command(cmd)
+    if returncode != 0:
+        logger.error(f"Failed to generate background segment for {input_path}: {stderr}")
+        return False
+    return True
+
 def create_longplay_video(
     audio_files: List[str],
     background_media: str,
@@ -97,7 +147,10 @@ def create_longplay_video(
     visualizer_y: float = 0.92,
     font_family: str = "Inter",
     track_names: List[str] = None,
-    title_font_size: str = "Medium"
+    title_font_size: str = "Medium",
+    tracks_data: List[Dict[str, Any]] = None,
+    ken_burns: bool = True,
+    ken_burns_speed: str = "normal"
 ) -> str:
     """
     Coordinates the entire Visual Music Longplay generation pipeline.
@@ -107,6 +160,117 @@ def create_longplay_video(
     encoder = detect_encoder()
     
     temp_files = []
+
+    # Check background type and total duration
+    is_image = background_media.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.bmp'))
+    total_duration = 0.0
+    if tracks_data:
+        for t in tracks_data:
+            d = t.get("duration", 0.0)
+            if d <= 0.0:
+                d, _, _ = get_audio_info(t["filepath"])
+            total_duration += d
+    else:
+        for f in audio_files:
+            d, _, _ = get_audio_info(f)
+            total_duration += d
+
+    # Check if we have custom track backgrounds to compile
+    has_custom_backgrounds = False
+    if tracks_data:
+        for t in tracks_data:
+            if t.get("background"):
+                has_custom_backgrounds = True
+                break
+                
+    should_compile_bg = has_custom_backgrounds or (is_image and ken_burns)
+
+    if should_compile_bg:
+        temp_dir = os.path.abspath(os.path.join(os.path.dirname(output_path), "..", "temp"))
+        os.makedirs(temp_dir, exist_ok=True)
+
+        if has_custom_backgrounds:
+            logger.info("Custom track-specific backgrounds detected. Pre-compiling master background...")
+            segment_files = []
+            
+            for i, track in enumerate(tracks_data):
+                audio_path = track["filepath"]
+                track_dur = track.get("duration", 0.0)
+                if track_dur <= 0.0:
+                    track_dur, _, _ = get_audio_info(audio_path)
+                    
+                bg_val = track.get("background")
+                
+                # If it's a list, it's a slideshow
+                if isinstance(bg_val, list) and len(bg_val) > 0:
+                    n = len(bg_val)
+                    dur_per_segment = track_dur / n
+                    for sub_idx, bg_item in enumerate(bg_val):
+                        bg_path = bg_item if bg_item else background_media
+                        seg_out = os.path.join(temp_dir, f"bg_seg_{i}_{sub_idx}_{os.getpid()}.mp4")
+                        success = generate_background_segment(bg_path, dur_per_segment, resolution, fps, seg_out, ken_burns, ken_burns_speed)
+                        if success and os.path.exists(seg_out):
+                            segment_files.append(seg_out)
+                            temp_files.append(seg_out)
+                        else:
+                            logger.warning(f"Could not generate slideshow segment, falling back to global bg.")
+                            fallback_out = os.path.join(temp_dir, f"bg_seg_{i}_{sub_idx}_fb_{os.getpid()}.mp4")
+                            generate_background_segment(background_media, dur_per_segment, resolution, fps, fallback_out, ken_burns, ken_burns_speed)
+                            segment_files.append(fallback_out)
+                            temp_files.append(fallback_out)
+                else:
+                    bg_path = bg_val if bg_val else background_media
+                    seg_out = os.path.join(temp_dir, f"bg_seg_{i}_{os.getpid()}.mp4")
+                    success = generate_background_segment(bg_path, track_dur, resolution, fps, seg_out, ken_burns, ken_burns_speed)
+                    if success and os.path.exists(seg_out):
+                        segment_files.append(seg_out)
+                        temp_files.append(seg_out)
+                    else:
+                        logger.warning(f"Could not generate track segment, falling back to global bg.")
+                        fallback_out = os.path.join(temp_dir, f"bg_seg_{i}_fb_{os.getpid()}.mp4")
+                        generate_background_segment(background_media, track_dur, resolution, fps, fallback_out, ken_burns, ken_burns_speed)
+                        segment_files.append(fallback_out)
+                        temp_files.append(fallback_out)
+                        
+            # Concat all segments into master_background.mp4
+            if segment_files:
+                concat_list_path = os.path.join(temp_dir, f"bg_concat_{os.getpid()}.txt")
+                concat_content = ""
+                for s in segment_files:
+                    safe_s = safe_path_for_ffmpeg(s)
+                    concat_content += f"file '{safe_s}'\n"
+                    
+                with open(concat_list_path, "w", encoding="utf-8") as f_concat:
+                    f_concat.write(concat_content)
+                temp_files.append(concat_list_path)
+                
+                master_bg_path = os.path.join(temp_dir, f"master_bg_{os.getpid()}.mp4")
+                concat_cmd = [
+                    "ffmpeg", "-y",
+                    "-f", "concat",
+                    "-safe", "0",
+                    "-i", concat_list_path,
+                    "-c", "copy",
+                    "-an",
+                    master_bg_path
+                ]
+                ret, stdout, stderr = run_command(concat_cmd)
+                if ret == 0 and os.path.exists(master_bg_path):
+                    logger.info("Successfully compiled master_background.mp4!")
+                    background_media = master_bg_path
+                    temp_files.append(master_bg_path)
+                else:
+                    logger.error(f"Concat failed to create master background: {stderr}. Using global background as fallback.")
+        else:
+            logger.info("Ken Burns enabled on global image background. Pre-compiling master background video...")
+            master_bg_path = os.path.join(temp_dir, f"master_bg_kb_{os.getpid()}.mp4")
+            success = generate_background_segment(
+                background_media, total_duration, resolution, fps, master_bg_path, 
+                ken_burns=ken_burns, ken_burns_speed=ken_burns_speed
+            )
+            if success and os.path.exists(master_bg_path):
+                background_media = master_bg_path
+                temp_files.append(master_bg_path)
     
     # 1. Merge audio files first
     temp_audio = os.path.join(os.path.dirname(output_path), f"merged_audio_{os.getpid()}.mp3")
@@ -228,7 +392,8 @@ def create_longplay_video(
             visualizer_height=visualizer_height,
             visualizer_y=visualizer_y,
             font_family=font_family,
-            title_font_size=title_font_size
+            title_font_size=title_font_size,
+            watermark=watermark
         )
         temp_files.extend(temp_png_files)
         
@@ -259,7 +424,8 @@ def create_longplay_video(
             visualizer_height=visualizer_height,
             visualizer_y=visualizer_y,
             font_family=font_family,
-            title_font_size=title_font_size
+            title_font_size=title_font_size,
+            watermark=watermark
         )
 
     # Clean up temp files

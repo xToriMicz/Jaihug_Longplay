@@ -1,33 +1,45 @@
 {
   "tracks": [
     {
-      "id": "track_2oifwk6o3",
-      "filename": "เจ็บจนไม่รู้สึก.mp3",
-      "filepath": "/uploads/a1814ab0_เจบจนไมรสก.mp3",
-      "duration": 264.792
-    },
-    {
       "id": "track_n1cok58kn",
       "filename": "ขี้เกียจแบบจริงใจ.mp3",
       "filepath": "/uploads/fef967f8_ขเกยจแบบจรงใจ.mp3",
-      "duration": 232.44
+      "duration": 232.44,
+      "background": [
+        "/uploads/df792566_ChatGPT Image 13 มิ.ย. 2569 18_46_48.png",
+        "/uploads/bd99a949_ChatGPT Image 13 มิ.ย. 2569 19_11_35.png"
+      ]
+    },
+    {
+      "id": "track_o2s5aa35u",
+      "filename": "แค่คนที่เข้าใจ.mp3",
+      "filepath": "/uploads/43d88497_แค่คนที่เข้าใจ.mp3",
+      "duration": 234.72,
+      "background": [
+        "/uploads/fed6fa08_ChatGPT Image 13 มิ.ย. 2569 19_23_57.png",
+        "/uploads/c88d4cd0_ChatGPT Image 13 มิ.ย. 2569 19_23_50.png"
+      ]
     }
   ],
   "backgrounds": [
     {
-      "filename": "test_bg.png",
-      "filepath": "/uploads/2c12770d_test_bg.png"
+      "filename": "ChatGPT Image 13 มิ.ย. 2569 18_46_48.png",
+      "filepath": "/uploads/df792566_ChatGPT Image 13 มิ.ย. 2569 18_46_48.png"
     },
     {
-      "filename": "ChatGPT Image 12 มิ.ย. 2569 19_31_42.png",
-      "filepath": "/uploads/c1825e4b_ChatGPT Image 12 ม.ย. 2569 19_31_42.png"
+      "filename": "ChatGPT Image 13 มิ.ย. 2569 19_11_35.png",
+      "filepath": "/uploads/bd99a949_ChatGPT Image 13 มิ.ย. 2569 19_11_35.png"
     },
     {
-      "filename": "ChatGPT Image 12 มิ.ย. 2569 21_19_49.png",
-      "filepath": "/uploads/3dadf6b8_ChatGPT Image 12 ม.ย. 2569 21_19_49.png"
+      "filename": "ChatGPT Image 13 มิ.ย. 2569 19_23_57.png",
+      "filepath": "/uploads/fed6fa08_ChatGPT Image 13 มิ.ย. 2569 19_23_57.png"
+    },
+    {
+      "filename": "ChatGPT Image 13 มิ.ย. 2569 19_23_50.png",
+      "filepath": "/uploads/c88d4cd0_ChatGPT Image 13 มิ.ย. 2569 19_23_50.png"
     }
   ],
-  "active_background": "/uploads/3dadf6b8_ChatGPT Image 12 ม.ย. 2569 21_19_49.png",
+  "active_background": "/uploads/c88d4cd0_ChatGPT Image 13 มิ.ย. 2569 19_23_50.png",
   "settings": {
     "main_title": "EP.01",
     "genre": "E2E Test Beats",

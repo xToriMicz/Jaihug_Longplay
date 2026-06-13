@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, Pause, Plus, Trash2, Sliders, Palette, Video, Music, Image as ImageIcon,
   ChevronRight, Save, Download, RotateCcw, AlertCircle, Sparkles, Loader2, ArrowRight, Volume2,
-  FolderOpen
+  FolderOpen, Check
 } from 'lucide-react';
 import { musicApi } from '../lib/api';
 import CanvasVisualizer, { getHexColor, THEME_COLORS } from '../components/canvas_visualizer';
@@ -27,6 +27,7 @@ export default function Home() {
   const [colorTheme, setColorTheme] = useState('Lo-fi / Chill');
   const [customColor, setCustomColor] = useState('');
   const [kenBurns, setKenBurns] = useState(true);
+  const [kenBurnsSpeed, setKenBurnsSpeed] = useState('normal'); // 'low' or 'normal'
   const [visOpacity, setVisOpacity] = useState(0.8);
   const [visHeight, setVisHeight] = useState(0.15); // Default 15% of container height
   const [visYPos, setVisYPos] = useState(0.92); // Default Y position is 92% (bottom)
@@ -34,6 +35,159 @@ export default function Home() {
   const [titleFontSize, setTitleFontSize] = useState('Medium');
 
   const isVertical = resolution.includes('Vertical');
+
+  const [activeBgSelectorTrackId, setActiveBgSelectorTrackId] = useState(null);
+  const [bgDimensions, setBgDimensions] = useState({});
+  const [selectedBgPaths, setSelectedBgPaths] = useState([]);
+  const [bgsPerTrack, setBgsPerTrack] = useState(1);
+  const [autoSaveStatus, setAutoSaveStatus] = useState("Saved");
+  const isInitialLoad = useRef(true);
+
+  const updateTrackBackground = (trackId, bgPath) => {
+    setTracks(prev => prev.map(t => t.id === trackId ? { ...t, background: bgPath } : t));
+  };
+
+  const toggleTrackBackgroundSelection = (trackId, filepath) => {
+    setTracks(prevTracks => prevTracks.map(track => {
+      if (track.id !== trackId) return track;
+      
+      let currentBg = track.background;
+      if (!currentBg) {
+        return { ...track, background: filepath };
+      } else if (Array.isArray(currentBg)) {
+        if (currentBg.includes(filepath)) {
+          const newList = currentBg.filter(f => f !== filepath);
+          return { ...track, background: newList.length === 0 ? null : (newList.length === 1 ? newList[0] : newList) };
+        } else {
+          return { ...track, background: [...currentBg, filepath] };
+        }
+      } else {
+        if (currentBg === filepath) {
+          return { ...track, background: null };
+        } else {
+          return { ...track, background: [currentBg, filepath] };
+        }
+      }
+    }));
+  };
+
+  const handleDeleteBackground = (filepath) => {
+    // 1. Remove from backgrounds list
+    setBackgrounds(prev => {
+      const filtered = prev.filter(bg => bg.filepath !== filepath);
+      
+      // 2. Adjust activeBg if we deleted the active one
+      if (activeBg === filepath) {
+        if (filtered.length > 0) {
+          setActiveBg(filtered[0].filepath);
+        } else {
+          setActiveBg("");
+        }
+      }
+      
+      return filtered;
+    });
+
+    // Also remove from selectedBgPaths
+    setSelectedBgPaths(prev => prev.filter(p => p !== filepath));
+
+    // 3. Clean up track backgrounds referencing this path
+    setTracks(prevTracks => prevTracks.map(track => {
+      let currentBg = track.background;
+      if (!currentBg) return track;
+      
+      if (Array.isArray(currentBg)) {
+        const newList = currentBg.filter(f => f !== filepath);
+        return { 
+          ...track, 
+          background: newList.length === 0 ? null : (newList.length === 1 ? newList[0] : newList) 
+        };
+      } else {
+        if (currentBg === filepath) {
+          return { ...track, background: null };
+        }
+        return track;
+      }
+    }));
+  };
+
+  const handleAutoDistributeBackgrounds = () => {
+    if (selectedBgPaths.length === 0 || tracks.length === 0) return;
+    setTracks(prev => prev.map((track, idx) => {
+      const trackBgs = [];
+      for (let j = 0; j < bgsPerTrack; j++) {
+        const bgIndex = (idx * bgsPerTrack + j) % selectedBgPaths.length;
+        trackBgs.push(selectedBgPaths[bgIndex]);
+      }
+      return {
+        ...track,
+        background: trackBgs.length === 0 ? null : (trackBgs.length === 1 ? trackBgs[0] : trackBgs)
+      };
+    }));
+  };
+
+  // Debounced Auto-Save
+  useEffect(() => {
+    if (isInitialLoad.current) return;
+
+    setAutoSaveStatus("Saving...");
+    const timer = setTimeout(async () => {
+      try {
+        const stateObj = {
+          tracks,
+          backgrounds,
+          active_background: activeBg,
+          settings: {
+            main_title: mainTitle,
+            genre: genreText,
+            description: descText,
+            watermark,
+            resolution,
+            fps,
+            visualizer_style: visStyle,
+            color_theme: colorTheme,
+            custom_color: customColor,
+            visualizer_opacity: visOpacity,
+            visualizer_height: visHeight,
+            visualizer_y: visYPos,
+            font_family: fontFamily,
+            title_font_size: titleFontSize,
+            ken_burns: kenBurns,
+            ken_burns_speed: kenBurnsSpeed
+          }
+        };
+        await musicApi.saveState(stateObj);
+        setAutoSaveStatus("Auto-saved");
+      } catch (err) {
+        console.error("Auto-save failed:", err);
+        setAutoSaveStatus("Error");
+      }
+    }, 2000); // 2 seconds debounce
+
+    return () => clearTimeout(timer);
+  }, [
+    tracks, backgrounds, activeBg, mainTitle, genreText, descText, watermark,
+    resolution, fps, visStyle, colorTheme, customColor, visOpacity, visHeight,
+    visYPos, fontFamily, titleFontSize, kenBurns, kenBurnsSpeed
+  ]);
+
+  const getCurrentTrackBackground = () => {
+    const currentTrack = tracks[currentTrackIndex];
+    if (!currentTrack || !currentTrack.background) {
+      return activeBg;
+    }
+    
+    const bg = currentTrack.background;
+    if (Array.isArray(bg)) {
+      if (bg.length === 0) return activeBg;
+      const N = bg.length;
+      const durationPerImage = currentTrack.duration / N;
+      const currentImageIdx = Math.min(Math.floor(currentTime / durationPerImage), N - 1);
+      return bg[currentImageIdx];
+    }
+    
+    return bg;
+  };
 
   // Player state
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
@@ -65,7 +219,10 @@ export default function Home() {
       try {
         const data = await musicApi.getState();
         if (data.tracks) setTracks(data.tracks);
-        if (data.backgrounds) setBackgrounds(data.backgrounds);
+        if (data.backgrounds) {
+          setBackgrounds(data.backgrounds);
+          setSelectedBgPaths(data.backgrounds.map(bg => bg.filepath));
+        }
         if (data.active_background) setActiveBg(data.active_background);
         if (data.settings) {
           const s = data.settings;
@@ -83,9 +240,14 @@ export default function Home() {
           if (s.visualizer_y !== undefined) setVisYPos(s.visualizer_y);
           if (s.font_family !== undefined) setFontFamily(s.font_family);
           if (s.title_font_size !== undefined) setTitleFontSize(s.title_font_size);
+          if (s.ken_burns !== undefined) setKenBurns(s.ken_burns);
+          if (s.ken_burns_speed !== undefined) setKenBurnsSpeed(s.ken_burns_speed);
         }
       } catch (err) {
         console.error("Failed to load workspace state:", err);
+      } finally {
+        isInitialLoad.current = false;
+        setAutoSaveStatus("Saved");
       }
     }
     loadState();
@@ -130,11 +292,32 @@ export default function Home() {
     fetchProjects();
   }, []);
 
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      setActiveBgSelectorTrackId(null);
+    };
+    window.addEventListener('click', handleGlobalClick);
+    return () => window.removeEventListener('click', handleGlobalClick);
+  }, []);
+
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      setActiveBgSelectorTrackId(null);
+    };
+    window.addEventListener('click', handleGlobalClick);
+    const currentBg = getCurrentTrackBackground();
+
+  return () => window.removeEventListener('click', handleGlobalClick);
+  }, []);
+
   const handleLoadProject = async (name) => {
     try {
       const data = await musicApi.loadProject(name);
       if (data.tracks) setTracks(data.tracks);
-      if (data.backgrounds) setBackgrounds(data.backgrounds);
+      if (data.backgrounds) {
+        setBackgrounds(data.backgrounds);
+        setSelectedBgPaths(data.backgrounds.map(bg => bg.filepath));
+      }
       if (data.active_background) setActiveBg(data.active_background);
       if (data.settings) {
         const s = data.settings;
@@ -152,6 +335,8 @@ export default function Home() {
         if (s.visualizer_y !== undefined) setVisYPos(s.visualizer_y);
         if (s.font_family !== undefined) setFontFamily(s.font_family);
         if (s.title_font_size !== undefined) setTitleFontSize(s.title_font_size);
+        if (s.ken_burns !== undefined) setKenBurns(s.ken_burns);
+        if (s.ken_burns_speed !== undefined) setKenBurnsSpeed(s.ken_burns_speed);
       }
       setShowProjectsModal(false);
       alert(`โหลดโปรเจค "${name}" สำเร็จ!`);
@@ -196,7 +381,11 @@ export default function Home() {
           visualizer_height: visHeight,
           visualizer_y: visYPos,
           font_family: fontFamily,
-          title_font_size: titleFontSize
+          title_font_size: titleFontSize,
+          ken_burns: kenBurns,
+          ken_burns_speed: kenBurnsSpeed,
+          ken_burns: kenBurns,
+          ken_burns_speed: kenBurnsSpeed
         }
       };
       await musicApi.saveState(stateObj);
@@ -241,6 +430,7 @@ export default function Home() {
             if (!activeBg) {
               setActiveBg(result.filepath);
             }
+            setSelectedBgPaths(prevSel => [...prevSel, result.filepath]);
             return newBgs;
           });
         }
@@ -349,7 +539,9 @@ export default function Home() {
 
   // Cleanup timers
   useEffect(() => {
-    return () => clearInterval(progressInterval.current);
+    const currentBg = getCurrentTrackBackground();
+
+  return () => clearInterval(progressInterval.current);
   }, []);
 
   // Sync audio ref with first track
@@ -457,7 +649,9 @@ export default function Home() {
           visualizer_height: visHeight,
           visualizer_y: visYPos,
           font_family: fontFamily,
-          title_font_size: titleFontSize
+          title_font_size: titleFontSize,
+          ken_burns: kenBurns,
+          ken_burns_speed: kenBurnsSpeed
         }
       };
       await musicApi.saveState(stateObj);
@@ -599,6 +793,14 @@ export default function Home() {
             onChange={(e) => setMainTitle(e.target.value)}
             className="hidden sm:block px-4 py-2 text-sm rounded-lg glass-input w-56 text-white"
           />
+          {autoSaveStatus && (
+            <div className="hidden md:flex items-center gap-1.5 text-[11px] text-white/40 mr-1 select-none">
+              {autoSaveStatus === "Saving..." && <Loader2 className="w-3 h-3 animate-spin text-[#ff007a]" />}
+              {autoSaveStatus === "Auto-saved" && <Check className="w-3.5 h-3.5 text-emerald-500" />}
+              {autoSaveStatus === "Error" && <AlertCircle className="w-3.5 h-3.5 text-rose-500" />}
+              <span>{autoSaveStatus === "Auto-saved" ? "Auto-saved" : autoSaveStatus === "Saving..." ? "Autosaving..." : autoSaveStatus}</span>
+            </div>
+          )}
           <button 
             onClick={handleSaveState} 
             disabled={isSaving}
@@ -663,13 +865,21 @@ export default function Home() {
                     autoPlay 
                     loop 
                     muted 
-                    className="absolute inset-0 w-full h-full object-cover z-0"
+                    className={`absolute inset-0 w-full h-full object-cover z-0 ${
+                      kenBurns 
+                        ? (kenBurnsSpeed === 'low' ? 'animate-kenburns-low' : 'animate-kenburns-normal') 
+                        : ''
+                    }`}
                   />
                 ) : (
                   <img 
                     src={musicApi.getBaseUrl() + activeBg} 
                     alt="Video background preview" 
-                    className={`absolute inset-0 w-full h-full object-cover z-0 ${kenBurns ? 'animate-kenburns' : ''}`}
+                    className={`absolute inset-0 w-full h-full object-cover z-0 ${
+                      kenBurns 
+                        ? (kenBurnsSpeed === 'low' ? 'animate-kenburns-low' : 'animate-kenburns-normal') 
+                        : ''
+                    }`}
                   />
                 )
               ) : (
@@ -707,20 +917,11 @@ export default function Home() {
                       textShadow: '3px 4px 6px rgba(0, 0, 0, 0.8), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
                     }}
                   >
-                    {tracks[currentTrackIndex]?.filename.replace(/\.[^/.]+$/, "")}
+                    {tracks[currentTrackIndex]?.filename.replace(/\.[^/.]+$/, "")}{watermark ? ` - ${watermark}` : ''}
                   </div>
                 )}
               </div>
-   
-              {/* Watermark Logo bottom left */}
-              {watermark && activeBg && (
-                <div 
-                  className="absolute bottom-[20%] left-[8%] z-30 select-none pointer-events-none drop-shadow-md font-extrabold tracking-wider text-white"
-                  style={{ fontSize: '3.2cqw' }}
-                >
-                  {watermark}
-                </div>
-              )}
+
    
               {/* Active Canvas Visualizer Overlay */}
               {activeBg && (
@@ -775,6 +976,16 @@ export default function Home() {
                 >
                   <div className={`w-5 h-5 rounded-full bg-white transition-all shadow-md ${kenBurns ? 'translate-x-4' : 'translate-x-0'}`} />
                 </button>
+                {kenBurns && (
+                  <select
+                    value={kenBurnsSpeed}
+                    onChange={(e) => setKenBurnsSpeed(e.target.value)}
+                    className="px-2 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-white cursor-pointer hover:bg-white/10 transition-all focus:outline-none"
+                  >
+                    <option value="normal" className="bg-[#181922] text-white">Normal</option>
+                    <option value="low" className="bg-[#181922] text-white">Low Speed</option>
+                  </select>
+                )}
               </div>
 
               {/* Watermark input */}
@@ -836,10 +1047,84 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                      <span className="text-xs text-white/40 tabular-nums">{formatTime(track.duration)}</span>
+                    <div className="flex items-center gap-3">
+                      {/* Background Selection Dropdown */}
+                      <div className="relative">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveBgSelectorTrackId(activeBgSelectorTrackId === track.id ? null : track.id);
+                          }}
+                          className={`px-2 py-1 text-[10px] font-semibold rounded-lg border transition-all flex items-center gap-1 cursor-pointer select-none ${track.background ? 'bg-[#ff007a]/10 border-[#ff007a]/30 text-[#ff007a]' : 'bg-white/5 border-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'}`}
+                        >
+                          <ImageIcon className="w-3.5 h-3.5" />
+                          <span>
+                            {Array.isArray(track.background)
+                              ? `Slideshow (${track.background.length})`
+                              : track.background 
+                                ? 'Custom BG' 
+                                : 'Default BG'
+                            }
+                          </span>
+                        </button>
+
+                        {activeBgSelectorTrackId === track.id && (
+                          <div 
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute right-0 mt-1.5 w-60 max-h-64 overflow-y-auto glass-panel border border-white/10 rounded-xl shadow-2xl p-2 z-50 flex flex-col gap-1 text-left"
+                          >
+                            <span className="text-[9px] text-white/30 font-bold px-2 py-1 uppercase tracking-wider block border-b border-white/[0.04] mb-1">
+                              เลือกพื้นหลังเพลงนี้
+                            </span>
+                            
+                            {/* Option: Default background */}
+                            <button
+                              onClick={() => {
+                                updateTrackBackground(track.id, null);
+                              }}
+                              className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all ${!track.background ? 'bg-white/5 text-[#ff007a] font-medium' : 'text-white/70 hover:bg-white/[0.02] hover:text-white'}`}
+                            >
+                              <span>ตามพื้นหลังหลัก</span>
+                              {!track.background && <Check className="w-3.5 h-3.5" />}
+                            </button>
+
+                            {/* Option: Uploaded backgrounds */}
+                            {backgrounds.map((bg) => {
+                              const isSelected = Array.isArray(track.background)
+                                ? track.background.includes(bg.filepath)
+                                : track.background === bg.filepath;
+                                
+                              return (
+                                <button
+                                  key={bg.filepath}
+                                  onClick={() => {
+                                    toggleTrackBackgroundSelection(track.id, bg.filepath);
+                                  }}
+                                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-left transition-all ${isSelected ? 'bg-white/5 text-[#ff007a] font-medium' : 'text-white/70 hover:bg-white/[0.02] hover:text-white'}`}
+                                >
+                                  {/* Small Thumbnail */}
+                                  {bg.filepath.toLowerCase().endsWith('.mp4') || bg.filepath.includes('_video_') ? (
+                                    <div className="w-6 h-6 rounded bg-black border border-white/5 flex items-center justify-center text-[7px] font-bold text-white/40 flex-shrink-0">MP4</div>
+                                  ) : (
+                                    <img 
+                                      src={musicApi.getBaseUrl() + bg.filepath} 
+                                      alt="" 
+                                      className="w-6 h-6 rounded object-cover border border-white/5 flex-shrink-0"
+                                    />
+                                  )}
+                                  <span className="truncate flex-1">{bg.filename}</span>
+                                  {isSelected && <Check className="w-3.5 h-3.5 ml-1 flex-shrink-0" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <span className="text-xs text-white/40 tabular-nums w-10 text-right">{formatTime(track.duration)}</span>
                       <button 
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setTracks(prev => prev.filter(t => t.id !== track.id));
                           if (currentTrackIndex >= tracks.length - 1 && currentTrackIndex > 0) {
                             setCurrentTrackIndex(prev => prev - 1);
@@ -881,38 +1166,148 @@ export default function Home() {
 
           {/* BACKGROUND MEDIA UPLOADER SECTION */}
           <div className="glass-panel rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-4 border-b border-white/[0.04] pb-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 border-b border-white/[0.04] pb-4">
               <div className="flex items-center gap-2">
                 <ImageIcon className="w-5 h-5 text-[#ff007a]" />
                 <h3 className="font-semibold text-sm">Background Media</h3>
+                <span className="text-xs text-white/30 ml-1">({backgrounds.length} items)</span>
               </div>
-              <span className="text-xs text-white/40">{backgrounds.length} items</span>
+              
+              {backgrounds.length > 0 && (
+                <div className="flex flex-wrap items-center gap-3 bg-white/5 p-2 rounded-xl border border-white/5">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-white/60">ภาพ/วิดีโอต่อ 1 เพลง:</span>
+                    <div className="flex items-center bg-black/40 rounded-lg border border-white/10 px-1">
+                      <button
+                        onClick={() => setBgsPerTrack(prev => Math.max(1, prev - 1))}
+                        className="w-6 h-6 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/5 rounded"
+                      >
+                        -
+                      </button>
+                      <span className="w-8 text-center text-xs font-bold tabular-nums">{bgsPerTrack}</span>
+                      <button
+                        onClick={() => setBgsPerTrack(prev => prev + 1)}
+                        className="w-6 h-6 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/5 rounded"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={handleAutoDistributeBackgrounds}
+                    disabled={selectedBgPaths.length === 0}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#ff007a] hover:bg-[#ff007a]/90 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+                  >
+                    จัดสรรอัตโนมัติ ({selectedBgPaths.length} รูปที่เลือก)
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
-              {backgrounds.map((bg, idx) => (
-                <div 
-                  key={idx}
-                  onClick={() => setActiveBg(bg.filepath)}
-                  className={`aspect-video rounded-xl overflow-hidden border relative cursor-pointer transition-all hover:scale-105 active:scale-95 ${activeBg === bg.filepath ? 'border-[#ff007a] ring-2 ring-[#ff007a]/20' : 'border-white/5 hover:border-white/20'}`}
-                >
-                  <img 
-                    src={musicApi.getBaseUrl() + bg.filepath} 
-                    alt="Background thumbnail" 
-                    className="w-full h-full object-cover"
-                  />
-                  {activeBg === bg.filepath && (
-                    <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-[#ff007a] text-[9px] font-bold text-white z-5 uppercase">
-                      Active
+              {backgrounds.map((bg, idx) => {
+                const isVideo = bg.filepath.toLowerCase().endsWith('.mp4') || bg.filepath.includes('_video_');
+                const dims = bgDimensions[bg.filepath];
+                let typeText = 'แนวนอน';
+                if (dims) {
+                  if (dims.w < dims.h) typeText = 'แนวตั้ง';
+                  else if (dims.w === dims.h) typeText = 'จัตุรัส';
+                }
+                
+                const isSelectedForMapping = selectedBgPaths.includes(bg.filepath);
+                
+                return (
+                  <div 
+                    key={idx}
+                    onClick={() => {
+                      setSelectedBgPaths(prev => 
+                        prev.includes(bg.filepath) 
+                          ? prev.filter(p => p !== bg.filepath)
+                          : [...prev, bg.filepath]
+                      );
+                      if (!selectedBgPaths.includes(bg.filepath)) {
+                        setActiveBg(bg.filepath);
+                      }
+                    }}
+                    className={`group aspect-video rounded-xl overflow-hidden border relative cursor-pointer transition-all hover:scale-105 active:scale-95 ${isSelectedForMapping ? 'border-[#ff007a] ring-2 ring-[#ff007a]/20' : 'border-white/5 hover:border-white/20'}`}
+                  >
+                    {/* Selection Checkbox indicator at top-left */}
+                    <div className="absolute top-1.5 left-1.5 z-10">
+                      {isSelectedForMapping ? (
+                        <div className="w-4 h-4 rounded-full bg-[#ff007a] flex items-center justify-center text-white border border-[#ff007a]">
+                          <Check className="w-2.5 h-2.5 stroke-[3]" />
+                        </div>
+                      ) : (
+                        <div className="w-4 h-4 rounded-full bg-black/40 border border-white/30" />
+                      )}
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    {isVideo ? (
+                      <>
+                        <video
+                          src={musicApi.getBaseUrl() + bg.filepath}
+                          className="hidden"
+                          onLoadedMetadata={(e) => {
+                            const { videoWidth, videoHeight } = e.target;
+                            setBgDimensions(prev => ({
+                              ...prev,
+                              [bg.filepath]: { w: videoWidth, h: videoHeight }
+                            }));
+                          }}
+                        />
+                        <div className="w-full h-full bg-black flex flex-col items-center justify-center text-xs font-bold text-white/40">
+                          <Video className="w-6 h-6 mb-1 text-white/30" />
+                          <span>วิดีโอ (MP4)</span>
+                        </div>
+                      </>
+                    ) : (
+                      <img 
+                        src={musicApi.getBaseUrl() + bg.filepath} 
+                        alt="Background thumbnail" 
+                        className="w-full h-full object-cover"
+                        onLoad={(e) => {
+                          const { naturalWidth, naturalHeight } = e.target;
+                          setBgDimensions(prev => ({
+                            ...prev,
+                            [bg.filepath]: { w: naturalWidth, h: naturalHeight }
+                          }));
+                        }}
+                      />
+                    )}
+                    
+                    {activeBg === bg.filepath && (
+                      <div className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded bg-[#ff007a] text-[8px] font-bold text-white z-10 uppercase tracking-wider">
+                        Active
+                      </div>
+                    )}
+                    
+                    {dims && (
+                      <div className="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-sm text-[8px] font-semibold text-white/90 z-5 select-none pointer-events-none">
+                        {dims.w}x{dims.h} ({typeText})
+                      </div>
+                    )}
+                    
+                    {/* Delete Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteBackground(bg.filepath);
+                      }}
+                      className="absolute bottom-1.5 right-1.5 p-1 rounded-lg bg-black/60 hover:bg-red-500/80 text-white/80 hover:text-white transition-all z-10 opacity-0 group-hover:opacity-100"
+                      title="ลบพื้นหลัง"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
               
               {/* Background media upload item */}
               <div className="aspect-video border border-dashed border-white/10 hover:border-white/20 transition-all rounded-xl relative flex flex-col items-center justify-center cursor-pointer group bg-white/[0.01]">
                 <input 
                   type="file"
+                  multiple
                   accept="image/jpg,image/jpeg,image/png,image/webp,video/mp4"
                   onChange={(e) => handleFileUpload(e, 'background')}
                   disabled={isUploading}

@@ -110,7 +110,8 @@ def create_song_title_overlay(
     idx: int,
     font_family: str = "Inter",
     visualizer_y: float = 0.92,
-    title_font_size: str = "Medium"
+    title_font_size: str = "Medium",
+    watermark: str = ""
 ) -> str:
     """
     Creates a transparent PNG with the song title centered below the visualizer,
@@ -120,7 +121,7 @@ def create_song_title_overlay(
     overlay_img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay_img)
     
-    full_text = song_name
+    full_text = f"{song_name} - {watermark}" if watermark else song_name
     
     # Map Small, Medium, Large to Y multipliers
     size_map = {"Small": 0.024, "Medium": 0.032, "Large": 0.040}
@@ -175,7 +176,8 @@ def get_ffmpeg_visualizer_args(
     visualizer_height: float = 0.15,
     visualizer_y: float = 0.92,
     font_family: str = "Inter",
-    title_font_size: str = "Medium"
+    title_font_size: str = "Medium",
+    watermark: str = ""
 ) -> Tuple[List[str], List[str]]:
     """
     Constructs FFmpeg arguments for fast native visualizers (Waveform or Spectrum Bars).
@@ -215,7 +217,7 @@ def get_ffmpeg_visualizer_args(
     # Build song title PNG overlays if timeline is provided
     if tracks_timeline and fonts_dir:
         for idx, track in enumerate(tracks_timeline, 1):
-            png_path = create_song_title_overlay(resolution, track["name"], fonts_dir, idx, font_family, visualizer_y, title_font_size)
+            png_path = create_song_title_overlay(resolution, track["name"], fonts_dir, idx, font_family, visualizer_y, title_font_size, watermark)
             temp_png_files.append(png_path)
             overlay_inputs.extend(["-i", png_path])
             
@@ -334,7 +336,8 @@ def render_custom_visualizer(
     visualizer_height: float = 0.15,
     visualizer_y: float = 0.92,
     font_family: str = "Inter",
-    title_font_size: str = "Medium"
+    title_font_size: str = "Medium",
+    watermark: str = ""
 ):
     """
     Renders custom visualizer styles (Circular Pulse, Particle Burst, Minimal Lines, etc.)
@@ -734,16 +737,17 @@ def render_custom_visualizer(
                         active_track = track['name']
                         break
                 if active_track:
+                    full_text = f"{active_track} - {watermark}" if watermark else active_track
                     # Map Small, Medium, Large to Y multipliers
                     size_map = {"Small": 0.024, "Medium": 0.032, "Large": 0.040}
                     mult = size_map.get(title_font_size, 0.032)
-                    font_song = get_font(active_track, True, int(height * mult), fonts_dir, font_family)
+                    font_song = get_font(full_text, True, int(height * mult), fonts_dir, font_family)
                     
                     draw_title = ImageDraw.Draw(frame_img)
-                    if contains_thai(active_track):
-                        tx_w = get_thai_text_width(draw_title, active_track, font_song)
+                    if contains_thai(full_text):
+                        tx_w = get_thai_text_width(draw_title, full_text, font_song)
                     else:
-                        bbox = draw_title.textbbox((0, 0), active_track, font=font_song)
+                        bbox = draw_title.textbbox((0, 0), full_text, font=font_song)
                         tx_w = bbox[2] - bbox[0]
                     pos_x = (width - tx_w) // 2
                     pos_y = int(height * (visualizer_y + 0.025)) # Placed below visualizer
@@ -753,7 +757,7 @@ def render_custom_visualizer(
                         draw_handle=draw_title,
                         frame_img=frame_img,
                         position=(pos_x, pos_y),
-                        text=active_track,
+                        text=full_text,
                         font=font_song,
                         fill_color=(255, 255, 255, 255),
                         outline_color=(0, 0, 0, 255),

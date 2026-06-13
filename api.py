@@ -90,7 +90,10 @@ def load_default_state() -> Dict[str, Any]:
             "visualizer_opacity": 0.8,
             "visualizer_height": 0.15,
             "visualizer_y": 0.92,
-            "font_family": "Inter"
+            "font_family": "Inter",
+            "title_font_size": "Medium",
+            "ken_burns": True,
+            "ken_burns_speed": "normal"
         }
     }
 
@@ -170,15 +173,37 @@ def run_export_pipeline(state_data: Dict[str, Any]):
             
         # Convert relative URLs to absolute paths
         audio_files = []
+        processed_tracks = []
+        bg_abs_path = os.path.join(BASE_DIR, active_bg_rel.lstrip("/"))
+        if not os.path.exists(bg_abs_path):
+             raise FileNotFoundError(f"Background media not found: {active_bg_rel}")
+             
         for t in tracks:
             rel_path = t["filepath"].lstrip("/")
             abs_path = os.path.join(BASE_DIR, rel_path)
             if os.path.exists(abs_path):
                 audio_files.append(abs_path)
                 
-        bg_abs_path = os.path.join(BASE_DIR, active_bg_rel.lstrip("/"))
-        if not os.path.exists(bg_abs_path):
-             raise FileNotFoundError(f"Background media not found: {active_bg_rel}")
+            # Resolve track background(s)
+            bg_val = t.get("background")
+            bg_abs = None
+            if bg_val:
+                if isinstance(bg_val, list):
+                    bg_abs = []
+                    for b in bg_val:
+                        if b:
+                            bg_abs.append(os.path.join(BASE_DIR, b.lstrip("/")))
+                        else:
+                            bg_abs.append(bg_abs_path)
+                else:
+                    bg_abs = os.path.join(BASE_DIR, bg_val.lstrip("/"))
+            
+            processed_tracks.append({
+                "filepath": abs_path,
+                "duration": t.get("duration", 0.0),
+                "background": bg_abs,
+                "name": os.path.splitext(t["filename"])[0]
+            })
              
         # Resolution mapping
         res_map = {
@@ -251,7 +276,10 @@ def run_export_pipeline(state_data: Dict[str, Any]):
             visualizer_y=float(settings.get("visualizer_y", 0.92)),
             font_family=settings.get("font_family", "Inter"),
             track_names=track_names,
-            title_font_size=settings.get("title_font_size", "Medium")
+            title_font_size=settings.get("title_font_size", "Medium"),
+            tracks_data=processed_tracks,
+            ken_burns=settings.get("ken_burns", True),
+            ken_burns_speed=settings.get("ken_burns_speed", "normal")
         )
         
         # Output URLs

@@ -58,8 +58,8 @@ body {
   box-shadow: 0 0 0 2px rgba(255, 0, 122, 0.2);
 }
 
-/* Ken Burns dynamic animation keyframes */
-@keyframes kenburns {
+/* Ken Burns dynamic animation keyframes and classes */
+@keyframes kenburns-normal {
   0% {
     transform: scale(1) translate(0, 0);
   }
@@ -71,8 +71,24 @@ body {
   }
 }
 
-.animate-kenburns {
-  animation: kenburns 30s ease-in-out infinite;
+@keyframes kenburns-low {
+  0% {
+    transform: scale(1) translate(0, 0);
+  }
+  50% {
+    transform: scale(1.08) translate(-0.8%, -0.8%);
+  }
+  100% {
+    transform: scale(1) translate(0, 0);
+  }
+}
+
+.animate-kenburns-normal {
+  animation: kenburns-normal 30s ease-in-out infinite;
+}
+
+.animate-kenburns-low {
+  animation: kenburns-low 45s ease-in-out infinite;
 }
 
 /* Custom range sliders */
