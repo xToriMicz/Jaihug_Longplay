@@ -215,6 +215,12 @@ export default function Home() {
   const audioRef = useRef(null);
   const progressInterval = useRef(null);
   const audioInputRef = useRef(null);
+  const currentTrackIndexRef = useRef(0);
+
+  // Sync ref with currentTrackIndex state to prevent stale closure bugs in intervals
+  useEffect(() => {
+    currentTrackIndexRef.current = currentTrackIndex;
+  }, [currentTrackIndex]);
 
   // Load state from backend on mount
   useEffect(() => {
@@ -523,6 +529,7 @@ export default function Home() {
       }
     } else {
       // Switch track and play immediately
+      currentTrackIndexRef.current = index;
       setCurrentTrackIndex(index);
       setCurrentTime(0);
       audio.src = musicApi.getBaseUrl() + tracks[index].filepath;
@@ -540,10 +547,11 @@ export default function Home() {
       const audio = audioRef.current;
       if (audio) {
         setCurrentTime(audio.currentTime);
-        // If track finished, play next
+        // If track finished, play next using up-to-date ref value to avoid stale closures
         if (audio.ended) {
-          if (currentTrackIndex + 1 < tracks.length) {
-            handleTrackChange(currentTrackIndex + 1);
+          const nextIndex = currentTrackIndexRef.current + 1;
+          if (nextIndex < tracks.length) {
+            handleTrackChange(nextIndex);
           } else {
             setIsPlaying(false);
             setCurrentTime(0);
