@@ -721,6 +721,8 @@ export default function Home() {
         error: err.message
       });
     }
+  };
+
   const getCssFilter = (filterName) => {
     switch (filterName) {
       case 'vintage':
