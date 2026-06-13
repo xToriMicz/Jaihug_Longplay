@@ -947,7 +947,7 @@ export default function Home() {
                       <button 
                         key={res}
                         onClick={() => setResolution(res)}
-                        className={`py-2 rounded-lg text-xs font-semibold border transition-all ${resolution === res ? 'bg-[#ff007a] border-[#ff007a] text-white' : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'}`}
+                        className={`py-2 rounded-lg text-xs font-semibold border transition-all focus:outline-none ${resolution === res ? 'bg-[#ff007a] border-[#ff007a] text-white shadow-lg shadow-[#ff007a]/20' : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'}`}
                       >
                         {res}
                       </button>
@@ -961,7 +961,7 @@ export default function Home() {
                       <button 
                         key={res}
                         onClick={() => setResolution(res)}
-                        className={`py-2 rounded-lg text-xs font-semibold border transition-all ${resolution === res ? 'bg-[#ff007a] border-[#ff007a] text-white' : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'}`}
+                        className={`py-2 rounded-lg text-xs font-semibold border transition-all focus:outline-none ${resolution === res ? 'bg-[#8b5cf6] border-[#8b5cf6] text-white shadow-lg shadow-[#8b5cf6]/20' : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'}`}
                       >
                         {res.replace('Vertical ', '')}
                       </button>

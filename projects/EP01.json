@@ -7,54 +7,6 @@
       "duration": 264.792
     },
     {
-      "id": "track_rmvxkik7i",
-      "filename": "เข้มแข็งทั้งน้ำตา.mp3",
-      "filepath": "/uploads/4f143fd7_เขมแขงทงนำตา.mp3",
-      "duration": 287.904
-    },
-    {
-      "id": "track_1y9puzlsb",
-      "filename": "คนที่เธอไม่เคยแคร์.mp3",
-      "filepath": "/uploads/0ba25f06_คนทเธอไมเคยแคร.mp3",
-      "duration": 289.872
-    },
-    {
-      "id": "track_2f099w9k9",
-      "filename": "แค่คนที่เข้าใจ.mp3",
-      "filepath": "/uploads/45ec8fb8_แคคนทเขาใจ.mp3",
-      "duration": 234.72
-    },
-    {
-      "id": "track_d9e66tjv3",
-      "filename": "เงียบให้สุด.mp3",
-      "filepath": "/uploads/b78b904c_เงยบใหสด.mp3",
-      "duration": 229.872
-    },
-    {
-      "id": "track_3lb1vr47n",
-      "filename": "จบที่ใบหย่า.mp3",
-      "filepath": "/uploads/bec889c8_จบทใบหยา.mp3",
-      "duration": 304.824
-    },
-    {
-      "id": "track_9bv9v09pe",
-      "filename": "จะรอไปเพื่ออะไร.mp3",
-      "filepath": "/uploads/c6354d41_จะรอไปเพออะไร.mp3",
-      "duration": 264.024
-    },
-    {
-      "id": "track_1f63qmbru",
-      "filename": "ขอโทษที่ดีไม่พอ.mp3",
-      "filepath": "/uploads/5eddbc9a_ขอโทษทดไมพอ.mp3",
-      "duration": 258.264
-    },
-    {
-      "id": "track_rv064cj9z",
-      "filename": "ขอโทษที่ยังรักเธอ.mp3",
-      "filepath": "/uploads/c9156643_ขอโทษทยงรกเธอ.mp3",
-      "duration": 299.184
-    },
-    {
       "id": "track_n1cok58kn",
       "filename": "ขี้เกียจแบบจริงใจ.mp3",
       "filepath": "/uploads/fef967f8_ขเกยจแบบจรงใจ.mp3",
@@ -81,7 +33,7 @@
     "genre": "E2E Test Beats",
     "description": "เอนด์ทูเอนด์อินทิเกรชันเทสต์รัน",
     "watermark": "",
-    "resolution": "HD",
+    "resolution": "Vertical HD",
     "fps": 24,
     "visualizer_style": "Spectrum Bars",
     "color_theme": "",
