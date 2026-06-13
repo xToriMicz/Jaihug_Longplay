@@ -42,6 +42,21 @@ export default function Home() {
   const [selectedBgPaths, setSelectedBgPaths] = useState([]);
   const [bgsPerTrack, setBgsPerTrack] = useState(1);
   const [autoSaveStatus, setAutoSaveStatus] = useState("Saved");
+
+  // UI states
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [exportState, setExportState] = useState({
+    status: 'idle', // idle, processing, success, failed
+    progress: 0.0,
+    step: '',
+    output_video: '',
+    output_timeline: '',
+    output_songlist: '',
+    error: ''
+  });
+  const [showExportModal, setShowExportModal] = useState(false);
+
   const isInitialLoad = useRef(true);
 
   const updateTrackBackground = (trackId, bgPath) => {
@@ -202,19 +217,7 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(0);
   const [trackProgress, setTrackProgress] = useState(0); // overall playlist progress
   
-  // UI states
-  const [isUploading, setIsUploading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [exportState, setExportState] = useState({
-    status: 'idle', // idle, processing, success, failed
-    progress: 0.0,
-    step: '',
-    output_video: '',
-    output_timeline: '',
-    output_songlist: '',
-    error: ''
-  });
-  const [showExportModal, setShowExportModal] = useState(false);
+
 
   const audioRef = useRef(null);
   const progressInterval = useRef(null);
