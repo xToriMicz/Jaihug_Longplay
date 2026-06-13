@@ -184,7 +184,10 @@ def run_export_pipeline(state_data: Dict[str, Any]):
         res_map = {
             "HD": (1920, 1080),
             "2K": (2560, 1440),
-            "4K": (3840, 2160)
+            "4K": (3840, 2160),
+            "Vertical HD": (1080, 1920),
+            "Vertical 2K": (1440, 2560),
+            "Vertical 4K": (2160, 3840)
         }
         res_val = res_map.get(settings.get("resolution", "HD"), (1920, 1080))
         

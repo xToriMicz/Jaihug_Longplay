@@ -33,6 +33,8 @@ export default function Home() {
   const [fontFamily, setFontFamily] = useState('Inter');
   const [titleFontSize, setTitleFontSize] = useState('Medium');
 
+  const isVertical = resolution.includes('Vertical');
+
   // Player state
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -650,7 +652,8 @@ export default function Home() {
             {/* Black Preview Box */}
             <div 
               onClick={togglePlay}
-              className={`relative w-full aspect-video bg-black rounded-2xl overflow-hidden flex flex-col justify-end group shadow-xl ${tracks.length > 0 ? 'cursor-pointer' : ''}`}
+              className={`relative bg-black rounded-2xl overflow-hidden flex flex-col justify-end group shadow-xl transition-all duration-300 ${isVertical ? 'aspect-[9/16] h-[550px] mx-auto' : 'w-full aspect-video'} ${tracks.length > 0 ? 'cursor-pointer' : ''}`}
+              style={{ containerType: 'inline-size' }}
             >
               {/* Background Layer with Optional Ken Burns Animation */}
               {activeBg ? (
@@ -700,7 +703,7 @@ export default function Home() {
                       fontFamily: fontFamily === 'Noto Sans Thai' 
                         ? 'var(--font-noto-sans-thai), sans-serif' 
                         : 'var(--font-inter), var(--font-sarabun), sans-serif',
-                      fontSize: titleFontSize === 'Small' ? 'calc(1.2vw)' : (titleFontSize === 'Large' ? 'calc(2.0vw)' : 'calc(1.6vw)'),
+                      fontSize: titleFontSize === 'Small' ? '2.8cqw' : (titleFontSize === 'Large' ? '4.8cqw' : '3.8cqw'),
                       textShadow: '3px 4px 6px rgba(0, 0, 0, 0.8), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
                     }}
                   >
@@ -711,7 +714,10 @@ export default function Home() {
    
               {/* Watermark Logo bottom left */}
               {watermark && activeBg && (
-                <div className="absolute bottom-[20%] left-[8%] z-30 select-none pointer-events-none drop-shadow-md text-[calc(1.4vw)] font-extrabold tracking-wider text-white">
+                <div 
+                  className="absolute bottom-[20%] left-[8%] z-30 select-none pointer-events-none drop-shadow-md font-extrabold tracking-wider text-white"
+                  style={{ fontSize: '3.2cqw' }}
+                >
                   {watermark}
                 </div>
               )}
@@ -933,16 +939,35 @@ export default function Home() {
             {/* Resolution Selector */}
             <div className="mb-4">
               <label className="text-xs text-white/50 block mb-2 font-medium">RESOLUTION</label>
-              <div className="grid grid-cols-3 gap-2">
-                {['HD', '2K', '4K'].map((res) => (
-                  <button 
-                    key={res}
-                    onClick={() => setResolution(res)}
-                    className={`py-2 rounded-lg text-xs font-semibold border transition-all ${resolution === res ? 'bg-[#ff007a] border-[#ff007a] text-white' : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'}`}
-                  >
-                    {res}
-                  </button>
-                ))}
+              <div className="flex flex-col gap-2">
+                <div>
+                  <span className="text-[10px] text-white/30 block mb-1 font-semibold">HORIZONTAL (16:9)</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {['HD', '2K', '4K'].map((res) => (
+                      <button 
+                        key={res}
+                        onClick={() => setResolution(res)}
+                        className={`py-2 rounded-lg text-xs font-semibold border transition-all ${resolution === res ? 'bg-[#ff007a] border-[#ff007a] text-white' : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'}`}
+                      >
+                        {res}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-[10px] text-white/30 block mb-1 font-semibold">VERTICAL (9:16)</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {['Vertical HD', 'Vertical 2K', 'Vertical 4K'].map((res) => (
+                      <button 
+                        key={res}
+                        onClick={() => setResolution(res)}
+                        className={`py-2 rounded-lg text-xs font-semibold border transition-all ${resolution === res ? 'bg-[#ff007a] border-[#ff007a] text-white' : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'}`}
+                      >
+                        {res.replace('Vertical ', '')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
