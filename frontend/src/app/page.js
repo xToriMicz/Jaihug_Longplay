@@ -224,44 +224,48 @@ export default function Home() {
     currentTrackIndexRef.current = currentTrackIndex;
   }, [currentTrackIndex]);
 
+  const applyProjectState = (data) => {
+    setTracks(data.tracks || []);
+    const loadedBackgrounds = data.backgrounds || [];
+    setBackgrounds(loadedBackgrounds);
+    
+    // Restore selectedBgPaths from settings if present, otherwise select all
+    const s = data.settings || {};
+    if (s.selected_bg_paths !== undefined) {
+      setSelectedBgPaths(s.selected_bg_paths);
+    } else {
+      setSelectedBgPaths(loadedBackgrounds.map(bg => bg.filepath));
+    }
+    
+    setActiveBg(data.active_background || '');
+    
+    // settings fallbacks
+    setMainTitle(s.main_title !== undefined ? s.main_title : 'เจ็บจนไม่รู้สึกอะไร...');
+    setGenreText(s.genre !== undefined ? s.genre : 'Acoustic, Sad Thai Pop Rock 2026');
+    setDescText(s.description !== undefined ? s.description : 'เพลงออนไลน์ ฟังสบายๆ ฟังทำงาน ร้านกาแฟ');
+    setWatermark(s.watermark !== undefined ? s.watermark : 'Jaihug Music');
+    setResolution(s.resolution !== undefined ? s.resolution : 'HD');
+    setFps(s.fps !== undefined ? s.fps : 24);
+    setVisStyle(s.visualizer_style !== undefined ? s.visualizer_style : 'Spectrum Bars');
+    setColorTheme(s.color_theme !== undefined ? s.color_theme : 'Lo-fi / Chill');
+    setCustomColor(s.custom_color !== undefined ? s.custom_color : '');
+    setVisOpacity(s.visualizer_opacity !== undefined ? s.visualizer_opacity : 0.8);
+    setVisHeight(s.visualizer_height !== undefined ? s.visualizer_height : 0.15);
+    setVisYPos(s.visualizer_y !== undefined ? s.visualizer_y : 0.92);
+    setFontFamily(s.font_family !== undefined ? s.font_family : 'Inter');
+    setTitleFontSize(s.title_font_size !== undefined ? s.title_font_size : 'Medium');
+    setKenBurns(s.ken_burns !== undefined ? s.ken_burns : true);
+    setKenBurnsSpeed(s.ken_burns_speed !== undefined ? s.ken_burns_speed : 'normal');
+    setBgFilter(s.background_filter !== undefined ? s.background_filter : 'none');
+    setBgsPerTrack(s.bgs_per_track !== undefined ? s.bgs_per_track : 1);
+  };
+
   // Load state from backend on mount
   useEffect(() => {
     async function loadState() {
       try {
         const data = await musicApi.getState();
-        if (data.tracks) setTracks(data.tracks);
-        if (data.backgrounds) {
-          setBackgrounds(data.backgrounds);
-          // Restore selectedBgPaths from settings if present, otherwise select all
-          const s = data.settings;
-          if (s && s.selected_bg_paths !== undefined) {
-            setSelectedBgPaths(s.selected_bg_paths);
-          } else {
-            setSelectedBgPaths(data.backgrounds.map(bg => bg.filepath));
-          }
-        }
-        if (data.active_background) setActiveBg(data.active_background);
-        if (data.settings) {
-          const s = data.settings;
-          if (s.main_title !== undefined) setMainTitle(s.main_title);
-          if (s.genre !== undefined) setGenreText(s.genre);
-          if (s.description !== undefined) setDescText(s.description);
-          if (s.watermark !== undefined) setWatermark(s.watermark);
-          if (s.resolution !== undefined) setResolution(s.resolution);
-          if (s.fps !== undefined) setFps(s.fps);
-          if (s.visualizer_style !== undefined) setVisStyle(s.visualizer_style);
-          if (s.color_theme !== undefined) setColorTheme(s.color_theme);
-          if (s.custom_color !== undefined) setCustomColor(s.custom_color);
-          if (s.visualizer_opacity !== undefined) setVisOpacity(s.visualizer_opacity);
-          if (s.visualizer_height !== undefined) setVisHeight(s.visualizer_height);
-          if (s.visualizer_y !== undefined) setVisYPos(s.visualizer_y);
-          if (s.font_family !== undefined) setFontFamily(s.font_family);
-          if (s.title_font_size !== undefined) setTitleFontSize(s.title_font_size);
-          if (s.ken_burns !== undefined) setKenBurns(s.ken_burns);
-          if (s.ken_burns_speed !== undefined) setKenBurnsSpeed(s.ken_burns_speed);
-          if (s.background_filter !== undefined) setBgFilter(s.background_filter);
-          if (s.bgs_per_track !== undefined) setBgsPerTrack(s.bgs_per_track);
-        }
+        applyProjectState(data);
       } catch (err) {
         console.error("Failed to load workspace state:", err);
       } finally {
@@ -336,39 +340,7 @@ export default function Home() {
   const handleLoadProject = async (name) => {
     try {
       const data = await musicApi.loadProject(name);
-      if (data.tracks) setTracks(data.tracks);
-      if (data.backgrounds) {
-        setBackgrounds(data.backgrounds);
-        // Restore selectedBgPaths from settings if present, otherwise select all
-        const s = data.settings;
-        if (s && s.selected_bg_paths !== undefined) {
-          setSelectedBgPaths(s.selected_bg_paths);
-        } else {
-          setSelectedBgPaths(data.backgrounds.map(bg => bg.filepath));
-        }
-      }
-      if (data.active_background) setActiveBg(data.active_background);
-      if (data.settings) {
-        const s = data.settings;
-        if (s.main_title !== undefined) setMainTitle(s.main_title);
-        if (s.genre !== undefined) setGenreText(s.genre);
-        if (s.description !== undefined) setDescText(s.description);
-        if (s.watermark !== undefined) setWatermark(s.watermark);
-        if (s.resolution !== undefined) setResolution(s.resolution);
-        if (s.fps !== undefined) setFps(s.fps);
-        if (s.visualizer_style !== undefined) setVisStyle(s.visualizer_style);
-        if (s.color_theme !== undefined) setColorTheme(s.color_theme);
-        if (s.custom_color !== undefined) setCustomColor(s.custom_color);
-        if (s.visualizer_opacity !== undefined) setVisOpacity(s.visualizer_opacity);
-        if (s.visualizer_height !== undefined) setVisHeight(s.visualizer_height);
-        if (s.visualizer_y !== undefined) setVisYPos(s.visualizer_y);
-        if (s.font_family !== undefined) setFontFamily(s.font_family);
-        if (s.title_font_size !== undefined) setTitleFontSize(s.title_font_size);
-        if (s.ken_burns !== undefined) setKenBurns(s.ken_burns);
-        if (s.ken_burns_speed !== undefined) setKenBurnsSpeed(s.ken_burns_speed);
-        if (s.background_filter !== undefined) setBgFilter(s.background_filter);
-        if (s.bgs_per_track !== undefined) setBgsPerTrack(s.bgs_per_track);
-      }
+      applyProjectState(data);
       setShowProjectsModal(false);
       alert(`โหลดโปรเจค "${name}" สำเร็จ!`);
     } catch (err) {
@@ -1843,22 +1815,11 @@ export default function Home() {
               <button 
                 onClick={() => {
                   if (confirm("คุณต้องการสร้างโปรเจคใหม่ใช่หรือไม่? ข้อมูลปัจจุบันที่ไม่ได้เซฟจะหายไป")) {
-                    setTracks([]);
-                    setActiveBg('');
-                    setMainTitle('โปรเจคใหม่');
-                    setGenreText('Acoustic, Sad Thai Pop Rock 2026');
-                    setDescText('เพลงออนไลน์ ฟังสบายๆ ฟังทำงาน ร้านกาแฟ');
-                    setWatermark('Jaihug Music');
-                    setResolution('HD');
-                    setFps(24);
-                    setVisStyle('Spectrum Bars');
-                    setColorTheme('Lo-fi / Chill');
-                    setCustomColor('');
-                    setKenBurns(true);
-                    setVisOpacity(0.8);
-                    setVisHeight(0.15);
-                    setVisYPos(0.92);
-                    setFontFamily('Inter');
+                    applyProjectState({
+                      settings: {
+                        main_title: 'โปรเจคใหม่'
+                      }
+                    });
                     setShowProjectsModal(false);
                   }
                 }}

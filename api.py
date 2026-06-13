@@ -94,7 +94,9 @@ def load_default_state() -> Dict[str, Any]:
             "title_font_size": "Medium",
             "ken_burns": True,
             "ken_burns_speed": "normal",
-            "background_filter": "none"
+            "background_filter": "none",
+            "bgs_per_track": 1,
+            "selected_bg_paths": []
         }
     }
 
