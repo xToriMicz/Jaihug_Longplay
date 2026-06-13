@@ -269,8 +269,10 @@ export default function Home() {
       } catch (err) {
         console.error("Failed to load workspace state:", err);
       } finally {
-        isInitialLoad.current = false;
-        setAutoSaveStatus("Saved");
+        setTimeout(() => {
+          isInitialLoad.current = false;
+          setAutoSaveStatus("Saved");
+        }, 1000);
       }
     }
     loadState();
@@ -282,27 +284,16 @@ export default function Home() {
 
   const handleNewProjectClick = () => {
     if (confirm("คุณต้องการสร้างโปรเจคใหม่ใช่หรือไม่? ข้อมูลปัจจุบันที่ไม่ได้เซฟจะหายไป")) {
-      setTracks([]);
-      setActiveBg('');
-      setMainTitle('โปรเจคใหม่');
-      setGenreText('Acoustic, Sad Thai Pop Rock 2026');
-      setDescText('เพลงออนไลน์ ฟังสบายๆ ฟังทำงาน ร้านกาแฟ');
-      setWatermark('Jaihug Music');
-      setResolution('HD');
-      setFps(24);
-      setVisStyle('Spectrum Bars');
-      setColorTheme('Lo-fi / Chill');
-      setCustomColor('');
-      setKenBurns(true);
-      setKenBurnsSpeed('normal');
-      setBgFilter('none');
-      setVisOpacity(0.8);
-      setVisHeight(0.15);
-      setVisYPos(0.92);
-      setFontFamily('Inter');
-      setTitleFontSize('Medium');
-      setBgsPerTrack(1);
-      setSelectedBgPaths([]);
+      isInitialLoad.current = true;
+      applyProjectState({
+        settings: {
+          main_title: 'โปรเจคใหม่'
+        }
+      });
+      setTimeout(() => {
+        isInitialLoad.current = false;
+        setAutoSaveStatus("Saved");
+      }, 1000);
     }
   };
 
@@ -339,13 +330,19 @@ export default function Home() {
 
   const handleLoadProject = async (name) => {
     try {
+      isInitialLoad.current = true;
       const data = await musicApi.loadProject(name);
       applyProjectState(data);
       setShowProjectsModal(false);
       alert(`โหลดโปรเจค "${name}" สำเร็จ!`);
+      setTimeout(() => {
+        isInitialLoad.current = false;
+        setAutoSaveStatus("Saved");
+      }, 1000);
     } catch (err) {
       console.error(err);
       alert("โหลดโปรเจคล้มเหลว: " + err.message);
+      isInitialLoad.current = false;
     }
   };
 
@@ -1815,12 +1812,17 @@ export default function Home() {
               <button 
                 onClick={() => {
                   if (confirm("คุณต้องการสร้างโปรเจคใหม่ใช่หรือไม่? ข้อมูลปัจจุบันที่ไม่ได้เซฟจะหายไป")) {
+                    isInitialLoad.current = true;
                     applyProjectState({
                       settings: {
                         main_title: 'โปรเจคใหม่'
                       }
                     });
                     setShowProjectsModal(false);
+                    setTimeout(() => {
+                      isInitialLoad.current = false;
+                      setAutoSaveStatus("Saved");
+                    }, 1000);
                   }
                 }}
                 className="px-4 py-2 text-xs font-semibold rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-white transition-all active:scale-95"
