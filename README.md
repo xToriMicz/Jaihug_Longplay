@@ -51,7 +51,13 @@ graph TD
 
 ## 📈 Version Changelog (Version Log)
 
-### `v1.4.0` — Vertical Format, Smart Background Mapping & Ken Burns Calibration (Current)
+### `v1.5.0` — Customizable Background Filters & Smart Chunk Compiler (Current)
+* **Custom Background Filters**: Added 15 aesthetic color-grading and artistic filters (Noir, Vintage, Sepia, Cinematic, Cyberpunk, warm/cool tones, vignettes, negate, dreamy, etc.) supported on both images and video backgrounds.
+* **Smart Chunk Strategy Background Compilation**: Optimized static image/Ken Burns background compilation by rendering base/final loop cycles and copy-concatenating them (`-c copy`), avoiding frame-by-frame encoding for long playtimes (saving 5x to 40x on background rendering resources).
+* **Real-time CSS Previews**: Integrated CSS filter equivalents (`filter: getCssFilter(bgFilter)`) and dynamic radial gradient overlays (`radial-gradient`) in the Next.js preview window for zero-latency filter previews.
+* **Workspace Persistence**: Ensured filter states, `bgs_per_track`, and `selected_bg_paths` are fully saved in `workspace_state.json` and persist through exports and project saves.
+
+### `v1.4.0` — Vertical Format, Smart Background Mapping & Ken Burns Calibration
 * **Vertical Video Support (9:16)**: Added vertical template resolutions (`Vertical HD` 1080x1920, `Vertical 2K` 1440x2560, `Vertical 4K` 2160x3840) formatted for YouTube Shorts, TikTok, and Reels. Implemented container query typography scaling (`cqw`) to prevent text overflow.
 * **Smart Background Mapping & Slideshows**: Enabled custom per-track backgrounds (1 background per track) and multi-image slideshow cycles (N backgrounds per track). The background compiler handles short videos by native stream-looping and concatenates segments with zero-overhead fallback optimization.
 * **Watermark & Title Centering**: Repositioned the watermark text from the bottom-left to be directly appended to the centered track title (`Song Name - Watermark`) below the visualizer.
@@ -90,12 +96,14 @@ graph TD
 * **Video Backgrounds** [DONE] — Supports `.mp4` video files as background media with automatic scaling/letterboxing.
 * **Smart Background Mapping** [DONE] — Assign unique background media (images or videos) to specific tracks, or multiple images as a slideshow sequence within a track.
 * **Ken Burns Zoom Settings & Calibration** [DONE] — Normal and Low speed zoom toggle on both previewer (class-based CSS) and exporter (sinusoidal FFmpeg zoompan).
+* **Background Asset Filters** [DONE] — Real-time CSS browser previews and background asset-level FFmpeg filters (Noir, Vintage, Cinematic, Sepia, etc.).
 * **Seamless Video Looping**: Automatically loop short background videos to match the playlist duration using FFmpeg filters (`xfade` for smooth crossfading transitions or reverse/ping-pong looping for seamless visual continuation).
 
-### Phase 2: Visualizer Aesthetics & Rendering Optimization (เอฟเฟกต์และการเรนเดอร์)
+### Phase 2: Visualizer Aesthetics, Rendering Optimization & Effects (เอฟเฟกต์และการเรนเดอร์)
 * **Gradient Visualizer Bars**: Allow customizable linear/radial color gradients on equalizer bars.
 * **Song Title Transitions**: Add smooth transition animations (Fade-in, Slide-up) when changing tracks.
-* **Engine Acceleration**: 
+* **Post-Processing Video Effects**: Overlay falling snow particle streams, bokeh lighting patterns, or animated stickers (GIFs/WebPs) over the final combined video stream.
+* **Engine Acceleration**:  
   * Integrate GPU rendering (ModernGL/Shaders) for visualizer drawing and blurs to achieve 3x–5x faster exports.
   * Implement frame-piping multithreading to parallelize rendering and FFmpeg writing.
 

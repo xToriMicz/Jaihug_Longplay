@@ -93,7 +93,8 @@ def load_default_state() -> Dict[str, Any]:
             "font_family": "Inter",
             "title_font_size": "Medium",
             "ken_burns": True,
-            "ken_burns_speed": "normal"
+            "ken_burns_speed": "normal",
+            "background_filter": "none"
         }
     }
 
@@ -279,7 +280,8 @@ def run_export_pipeline(state_data: Dict[str, Any]):
             title_font_size=settings.get("title_font_size", "Medium"),
             tracks_data=processed_tracks,
             ken_burns=settings.get("ken_burns", True),
-            ken_burns_speed=settings.get("ken_burns_speed", "normal")
+            ken_burns_speed=settings.get("ken_burns_speed", "normal"),
+            background_filter=settings.get("background_filter", "none")
         )
         
         # Output URLs

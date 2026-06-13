@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageColor
 from modules.utils import safe_path_for_ffmpeg, run_command, ensure_fonts, get_font, contains_thai, render_thai_clean
 from modules.audio_merger import get_audio_info, merge_audio_files
 from modules.visualizer_renderer import get_ffmpeg_visualizer_args, render_custom_visualizer
+from modules.filters import get_filter_string
 
 logger = logging.getLogger(__name__)
 
@@ -70,50 +71,174 @@ def generate_background_segment(
     fps: int,
     output_path: str,
     ken_burns: bool = True,
-    ken_burns_speed: str = "normal"
+    ken_burns_speed: str = "normal",
+    background_filter: str = "none"
 ) -> bool:
     """
     Generates a single background video segment matching the target resolution, fps, and duration.
     Strips audio and uses ultrafast preset for speed.
+    Uses Smart Chunk Strategy to avoid long redundant video encoding.
     """
     width, height = resolution
     is_img = input_path.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.bmp'))
+    filter_str = get_filter_string(background_filter)
     
     if is_img:
+        # Determine chunk cycle length
         if ken_burns:
-            zoom_amount = 0.08 if ken_burns_speed == "low" else 0.12
-            cycle_len = 45 if ken_burns_speed == "low" else 30
-            vf = (
-                f"scale={width*2}:{height*2}:force_original_aspect_ratio=decrease,"
-                f"pad={width*2}:{height*2}:(ow-iw)/2:(oh-ih)/2,"
-                f"zoompan=z='1.0+{zoom_amount}*(0.5+0.5*sin(2*3.14159265*on/({cycle_len}*{fps})))':"
-                f"x='iw/2-(iw/zoom)/2':y='ih/2-(ih/zoom)/2':d=1:s={width}x{height}:fps={fps}"
-            )
-            tune_args = []
+            cycle_len = 45.0 if ken_burns_speed == "low" else 30.0
         else:
-            vf = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
-            tune_args = ["-tune", "stillimage"]
+            cycle_len = 5.0
+            
+        full_chunks = int(duration // cycle_len)
+        remainder = duration % cycle_len
+        
+        # Only use chunk concat strategy if duration is at least 2 * cycle_len
+        use_chunk_strategy = (duration >= 2 * cycle_len)
+        
+        if use_chunk_strategy:
+            logger.info(f"Using Smart Chunk Strategy for background image: {input_path} ({duration:.2f}s)")
+            temp_dir = os.path.abspath(os.path.join(os.path.dirname(output_path), "..", "temp"))
+            os.makedirs(temp_dir, exist_ok=True)
+            
+            base_chunks_count = full_chunks - 1
+            final_chunk_duration = cycle_len + remainder
+            
+            chunk_base_path = os.path.join(temp_dir, f"chunk_base_{os.getpid()}_{int(time.time()*1000)}.mp4")
+            chunk_final_path = os.path.join(temp_dir, f"chunk_final_{os.getpid()}_{int(time.time()*1000)}.mp4")
+            
+            def render_chunk(chunk_dur: float, chunk_out_path: str) -> bool:
+                if ken_burns:
+                    zoom_amount = 0.08 if ken_burns_speed == "low" else 0.12
+                    c_len = 45 if ken_burns_speed == "low" else 30
+                    vf = (
+                        f"scale={width*2}:{height*2}:force_original_aspect_ratio=decrease,"
+                        f"pad={width*2}:{height*2}:(ow-iw)/2:(oh-ih)/2,"
+                        f"zoompan=z='1.0+{zoom_amount}*(0.5+0.5*sin(2*3.14159265*on/({c_len}*{fps})))':"
+                        f"x='iw/2-(iw/zoom)/2':y='ih/2-(ih/zoom)/2':d=1:s={width}x{height}:fps={fps}"
+                    )
+                    tune_args = []
+                else:
+                    vf = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
+                    tune_args = ["-tune", "stillimage"]
+                    
+                if filter_str:
+                    vf = f"{vf},{filter_str}"
+                    
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-loop", "1",
+                    "-t", f"{chunk_dur:.3f}",
+                    "-i", input_path,
+                    "-vf", vf,
+                    "-c:v", "libx264",
+                    "-preset", "ultrafast"
+                ] + tune_args + [
+                    "-pix_fmt", "yuv420p",
+                    "-r", str(fps),
+                    "-an",
+                    chunk_out_path
+                ]
+                
+                ret, stdout, stderr = run_command(cmd)
+                return ret == 0
+                
+            # Render base chunk
+            logger.info(f"Rendering base chunk ({cycle_len}s)...")
+            if not render_chunk(cycle_len, chunk_base_path):
+                logger.error("Failed to render base chunk")
+                return False
+                
+            # Render final chunk
+            logger.info(f"Rendering final chunk ({final_chunk_duration:.2f}s)...")
+            if not render_chunk(final_chunk_duration, chunk_final_path):
+                try: os.remove(chunk_base_path)
+                except: pass
+                logger.error("Failed to render final chunk")
+                return False
+                
+            # Create concat list
+            concat_txt = os.path.join(temp_dir, f"concat_chunks_{os.getpid()}_{int(time.time()*1000)}.txt")
+            try:
+                with open(concat_txt, "w", encoding="utf-8") as f_concat:
+                    for _ in range(base_chunks_count):
+                        f_concat.write(f"file '{safe_path_for_ffmpeg(chunk_base_path)}'\n")
+                    f_concat.write(f"file '{safe_path_for_ffmpeg(chunk_final_path)}'\n")
+                    
+                concat_cmd = [
+                    "ffmpeg", "-y",
+                    "-f", "concat",
+                    "-safe", "0",
+                    "-i", concat_txt,
+                    "-c", "copy",
+                    "-an",
+                    output_path
+                ]
+                logger.info(f"Concatenating chunks to final output ({base_chunks_count} x {cycle_len}s + {final_chunk_duration:.2f}s)...")
+                ret, stdout, stderr = run_command(concat_cmd)
+                success = (ret == 0 and os.path.exists(output_path))
+                if not success:
+                    logger.error(f"Concat command failed: {stderr}")
+                return success
+            finally:
+                # Cleanup temp files
+                for f in [chunk_base_path, chunk_final_path, concat_txt]:
+                    try:
+                        if os.path.exists(f):
+                            os.remove(f)
+                    except Exception as e:
+                        logger.warning(f"Could not clean up temp file {f}: {e}")
+        else:
+            # Traditional encoding for short durations
+            if ken_burns:
+                zoom_amount = 0.08 if ken_burns_speed == "low" else 0.12
+                cycle_len_val = 45 if ken_burns_speed == "low" else 30
+                vf = (
+                    f"scale={width*2}:{height*2}:force_original_aspect_ratio=decrease,"
+                    f"pad={width*2}:{height*2}:(ow-iw)/2:(oh-ih)/2,"
+                    f"zoompan=z='1.0+{zoom_amount}*(0.5+0.5*sin(2*3.14159265*on/({cycle_len_val}*{fps})))':"
+                    f"x='iw/2-(iw/zoom)/2':y='ih/2-(ih/zoom)/2':d=1:s={width}x{height}:fps={fps}"
+                )
+                tune_args = []
+            else:
+                vf = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
+                tune_args = ["-tune", "stillimage"]
 
-        cmd = [
-            "ffmpeg", "-y",
-            "-loop", "1",
-            "-t", f"{duration:.3f}",
-            "-i", input_path,
-            "-vf", vf,
-            "-c:v", "libx264",
-            "-preset", "ultrafast"
-        ] + tune_args + [
-            "-pix_fmt", "yuv420p",
-            "-r", str(fps),
-            "-an",
-            output_path
-        ]
+            if filter_str:
+                vf = f"{vf},{filter_str}"
+
+            cmd = [
+                "ffmpeg", "-y",
+                "-loop", "1",
+                "-t", f"{duration:.3f}",
+                "-i", input_path,
+                "-vf", vf,
+                "-c:v", "libx264",
+                "-preset", "ultrafast"
+            ] + tune_args + [
+                "-pix_fmt", "yuv420p",
+                "-r", str(fps),
+                "-an",
+                output_path
+            ]
+            
+            returncode, stdout, stderr = run_command(cmd)
+            if returncode != 0:
+                logger.error(f"Failed to generate background segment for {input_path}: {stderr}")
+                return False
+            return True
+            
     else:
+        # Video background
+        vf = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
+        if filter_str:
+            vf = f"{vf},{filter_str}"
+            
         cmd = [
             "ffmpeg", "-y",
             "-stream_loop", "-1",
             "-i", input_path,
-            "-vf", f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2",
+            "-vf", vf,
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-pix_fmt", "yuv420p",
@@ -123,11 +248,12 @@ def generate_background_segment(
             output_path
         ]
         
-    returncode, stdout, stderr = run_command(cmd)
-    if returncode != 0:
-        logger.error(f"Failed to generate background segment for {input_path}: {stderr}")
-        return False
-    return True
+        returncode, stdout, stderr = run_command(cmd)
+        if returncode != 0:
+            logger.error(f"Failed to generate background segment for {input_path}: {stderr}")
+            return False
+        return True
+
 
 def create_longplay_video(
     audio_files: List[str],
@@ -150,7 +276,8 @@ def create_longplay_video(
     title_font_size: str = "Medium",
     tracks_data: List[Dict[str, Any]] = None,
     ken_burns: bool = True,
-    ken_burns_speed: str = "normal"
+    ken_burns_speed: str = "normal",
+    background_filter: str = "none"
 ) -> str:
     """
     Coordinates the entire Visual Music Longplay generation pipeline.
@@ -160,7 +287,7 @@ def create_longplay_video(
     encoder = detect_encoder()
     
     temp_files = []
-
+ 
     # Check background type and total duration
     is_image = background_media.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.bmp'))
     total_duration = 0.0
@@ -174,7 +301,7 @@ def create_longplay_video(
         for f in audio_files:
             d, _, _ = get_audio_info(f)
             total_duration += d
-
+ 
     # Check if we have custom track backgrounds to compile
     has_custom_backgrounds = False
     if tracks_data:
@@ -183,8 +310,9 @@ def create_longplay_video(
                 has_custom_backgrounds = True
                 break
                 
-    should_compile_bg = has_custom_backgrounds or (is_image and ken_burns)
-
+    has_filter = background_filter and background_filter.lower() != "none"
+    should_compile_bg = has_custom_backgrounds or (is_image and ken_burns) or has_filter
+ 
     if should_compile_bg:
         temp_dir = os.path.abspath(os.path.join(os.path.dirname(output_path), "..", "temp"))
         os.makedirs(temp_dir, exist_ok=True)
@@ -208,27 +336,27 @@ def create_longplay_video(
                     for sub_idx, bg_item in enumerate(bg_val):
                         bg_path = bg_item if bg_item else background_media
                         seg_out = os.path.join(temp_dir, f"bg_seg_{i}_{sub_idx}_{os.getpid()}.mp4")
-                        success = generate_background_segment(bg_path, dur_per_segment, resolution, fps, seg_out, ken_burns, ken_burns_speed)
+                        success = generate_background_segment(bg_path, dur_per_segment, resolution, fps, seg_out, ken_burns, ken_burns_speed, background_filter)
                         if success and os.path.exists(seg_out):
                             segment_files.append(seg_out)
                             temp_files.append(seg_out)
                         else:
                             logger.warning(f"Could not generate slideshow segment, falling back to global bg.")
                             fallback_out = os.path.join(temp_dir, f"bg_seg_{i}_{sub_idx}_fb_{os.getpid()}.mp4")
-                            generate_background_segment(background_media, dur_per_segment, resolution, fps, fallback_out, ken_burns, ken_burns_speed)
+                            generate_background_segment(background_media, dur_per_segment, resolution, fps, fallback_out, ken_burns, ken_burns_speed, background_filter)
                             segment_files.append(fallback_out)
                             temp_files.append(fallback_out)
                 else:
                     bg_path = bg_val if bg_val else background_media
                     seg_out = os.path.join(temp_dir, f"bg_seg_{i}_{os.getpid()}.mp4")
-                    success = generate_background_segment(bg_path, track_dur, resolution, fps, seg_out, ken_burns, ken_burns_speed)
+                    success = generate_background_segment(bg_path, track_dur, resolution, fps, seg_out, ken_burns, ken_burns_speed, background_filter)
                     if success and os.path.exists(seg_out):
                         segment_files.append(seg_out)
                         temp_files.append(seg_out)
                     else:
                         logger.warning(f"Could not generate track segment, falling back to global bg.")
                         fallback_out = os.path.join(temp_dir, f"bg_seg_{i}_fb_{os.getpid()}.mp4")
-                        generate_background_segment(background_media, track_dur, resolution, fps, fallback_out, ken_burns, ken_burns_speed)
+                        generate_background_segment(background_media, track_dur, resolution, fps, fallback_out, ken_burns, ken_burns_speed, background_filter)
                         segment_files.append(fallback_out)
                         temp_files.append(fallback_out)
                         
@@ -262,11 +390,11 @@ def create_longplay_video(
                 else:
                     logger.error(f"Concat failed to create master background: {stderr}. Using global background as fallback.")
         else:
-            logger.info("Ken Burns enabled on global image background. Pre-compiling master background video...")
+            logger.info("Ken Burns or background filter enabled on global image background. Pre-compiling master background video...")
             master_bg_path = os.path.join(temp_dir, f"master_bg_kb_{os.getpid()}.mp4")
             success = generate_background_segment(
                 background_media, total_duration, resolution, fps, master_bg_path, 
-                ken_burns=ken_burns, ken_burns_speed=ken_burns_speed
+                ken_burns=ken_burns, ken_burns_speed=ken_burns_speed, background_filter=background_filter
             )
             if success and os.path.exists(master_bg_path):
                 background_media = master_bg_path
@@ -369,6 +497,7 @@ def create_longplay_video(
     logger.info(f"Step 2: Rendering visualizer (Style: {style}, Color Theme: {color_theme})...")
     
     style_lower = style.lower()
+    vis_bg_filter = "none" if should_compile_bg else background_filter
     
     # Waveform can be rendered fast via FFmpeg Native filter complex.
     # Spectrum Bars is rendered via the custom Python renderer to support chunky spacing.
@@ -393,7 +522,8 @@ def create_longplay_video(
             visualizer_y=visualizer_y,
             font_family=font_family,
             title_font_size=title_font_size,
-            watermark=watermark
+            watermark=watermark,
+            background_filter=vis_bg_filter
         )
         temp_files.extend(temp_png_files)
         
@@ -425,7 +555,8 @@ def create_longplay_video(
             visualizer_y=visualizer_y,
             font_family=font_family,
             title_font_size=title_font_size,
-            watermark=watermark
+            watermark=watermark,
+            background_filter=vis_bg_filter
         )
 
     # Clean up temp files

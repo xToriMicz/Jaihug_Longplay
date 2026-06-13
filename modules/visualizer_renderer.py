@@ -6,6 +6,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageColor, ImageFont
 from typing import List, Dict, Any, Tuple
 from modules.utils import safe_path_for_ffmpeg, run_command, get_font, contains_thai, render_thai_clean, get_thai_text_width
+from modules.filters import get_filter_string
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +178,8 @@ def get_ffmpeg_visualizer_args(
     visualizer_y: float = 0.92,
     font_family: str = "Inter",
     title_font_size: str = "Medium",
-    watermark: str = ""
+    watermark: str = "",
+    background_filter: str = "none"
 ) -> Tuple[List[str], List[str]]:
     """
     Constructs FFmpeg arguments for fast native visualizers (Waveform or Spectrum Bars).
@@ -186,6 +188,7 @@ def get_ffmpeg_visualizer_args(
     width, height = resolution
     color_rgb = get_color_rgb(color_theme)
     color_hex = f"0x{color_rgb[0]:02x}{color_rgb[1]:02x}{color_rgb[2]:02x}"
+    filter_str = get_filter_string(background_filter)
     
     # Position and sizing for visualizers: 
     # Width = 60% of video width, Height = 150px, placed at the bottom 15% of the screen
@@ -229,10 +232,16 @@ def get_ffmpeg_visualizer_args(
     if is_image:
         # Image background is already pre-resized and pre-padded in python
         # We key out black background from native visualizer and apply opacity
-        filter_complex_list = [
+        filter_complex_list = []
+        bg_src = "[0:v]"
+        if filter_str:
+            filter_complex_list.append(f"[0:v]{filter_str}[filtered_bg]")
+            bg_src = "[filtered_bg]"
+            
+        filter_complex_list.extend([
             f"[1:a]{vis_filter},colorkey=0x000000:0.1:0.1,format=rgba,colorchannelmixer=aa={opacity}[vis]",
-            f"[0:v][vis]overlay=x={pos_x}:y={pos_y}:shortest=1[bg0]"
-        ]
+            f"{bg_src}[vis]overlay=x={pos_x}:y={pos_y}:shortest=1[bg0]"
+        ])
         
         # Chain overlays for song titles
         last_v = "bg0"
@@ -271,8 +280,12 @@ def get_ffmpeg_visualizer_args(
         ]
     else:
         # Video background, loop natively using -stream_loop -1
+        bg_vf = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
+        if filter_str:
+            bg_vf = f"{bg_vf},{filter_str}"
+            
         filter_complex_list = [
-            f"[0:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2[bg]",
+            f"[0:v]{bg_vf}[bg]",
             f"[bg][1:v]overlay=0:0[bg_with_text]",
             f"[2:a]{vis_filter},colorkey=0x000000:0.1:0.1,format=rgba,colorchannelmixer=aa={opacity}[vis]",
             f"[bg_with_text][vis]overlay=x={pos_x}:y={pos_y}:shortest=1[bg0]"
@@ -337,7 +350,8 @@ def render_custom_visualizer(
     visualizer_y: float = 0.92,
     font_family: str = "Inter",
     title_font_size: str = "Medium",
-    watermark: str = ""
+    watermark: str = "",
+    background_filter: str = "none"
 ):
     """
     Renders custom visualizer styles (Circular Pulse, Particle Burst, Minimal Lines, etc.)
@@ -346,6 +360,7 @@ def render_custom_visualizer(
     width, height = resolution
     style_lower = style.lower()
     color_rgb = get_color_rgb(color_theme)
+    filter_str = get_filter_string(background_filter)
     
     # 1. Extract audio sample rate and PCM details via FFmpeg pipe
     sample_rate = 44100  # Match standard sample rate for identical frequency range
@@ -374,6 +389,12 @@ def render_custom_visualizer(
         
     if is_image:
         # Background image is already resized and padded in python
+        bg_src = "[0:v]"
+        bg_filt_step = ""
+        if filter_str:
+            bg_filt_step = f"[0:v]{filter_str}[filtered_bg]; "
+            bg_src = "[filtered_bg]"
+            
         writer_cmd = [
             "ffmpeg", "-threads", "4", "-y",
             "-loop", "1", "-t", str(duration), "-i", background_path,  # Input 0: background image
@@ -383,7 +404,7 @@ def render_custom_visualizer(
             "-r", str(fps),
             "-i", "-",                                                 # Input 1: raw video from python
             "-i", audio_path,                                          # Input 2: audio
-            "-filter_complex", f"[1:v]format=rgba,colorchannelmixer=aa={opacity}[vis_opacity]; [0:v][vis_opacity]overlay=0:0:shortest=1[outv]",
+            "-filter_complex", f"{bg_filt_step}[1:v]format=rgba,colorchannelmixer=aa={opacity}[vis_opacity]; {bg_src}[vis_opacity]overlay=0:0:shortest=1[outv]",
             "-map", "[outv]",
             "-map", "2:a",
         ] + enc_args + [
@@ -394,6 +415,10 @@ def render_custom_visualizer(
         ]
     else:
         # Video background, loop natively
+        bg_vf = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2"
+        if filter_str:
+            bg_vf = f"{bg_vf},{filter_str}"
+            
         writer_cmd = [
             "ffmpeg", "-threads", "4", "-y",
             "-stream_loop", "-1", "-i", background_path,                # Input 0: background video
@@ -404,7 +429,7 @@ def render_custom_visualizer(
             "-r", str(fps),
             "-i", "-",                                                 # Input 2: raw video from python
             "-i", audio_path,                                          # Input 3: audio
-            "-filter_complex", f"[0:v]scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2[bg];"
+            "-filter_complex", f"[0:v]{bg_vf}[bg];"
                                f"[bg][1:v]overlay=0:0[bg_with_text];"
                                f"[2:v]format=rgba,colorchannelmixer=aa={opacity}[vis_opacity];"
                                f"[bg_with_text][vis_opacity]overlay=0:0:shortest=1[outv]",

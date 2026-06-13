@@ -28,6 +28,7 @@ export default function Home() {
   const [customColor, setCustomColor] = useState('');
   const [kenBurns, setKenBurns] = useState(true);
   const [kenBurnsSpeed, setKenBurnsSpeed] = useState('normal'); // 'low' or 'normal'
+  const [bgFilter, setBgFilter] = useState('none');
   const [visOpacity, setVisOpacity] = useState(0.8);
   const [visHeight, setVisHeight] = useState(0.15); // Default 15% of container height
   const [visYPos, setVisYPos] = useState(0.92); // Default Y position is 92% (bottom)
@@ -154,6 +155,7 @@ export default function Home() {
             title_font_size: titleFontSize,
             ken_burns: kenBurns,
             ken_burns_speed: kenBurnsSpeed,
+            background_filter: bgFilter,
             bgs_per_track: bgsPerTrack,
             selected_bg_paths: selectedBgPaths
           }
@@ -170,7 +172,7 @@ export default function Home() {
   }, [
     tracks, backgrounds, activeBg, mainTitle, genreText, descText, watermark,
     resolution, fps, visStyle, colorTheme, customColor, visOpacity, visHeight,
-    visYPos, fontFamily, titleFontSize, kenBurns, kenBurnsSpeed, bgsPerTrack,
+    visYPos, fontFamily, titleFontSize, kenBurns, kenBurnsSpeed, bgFilter, bgsPerTrack,
     selectedBgPaths
   ]);
 
@@ -257,6 +259,7 @@ export default function Home() {
           if (s.title_font_size !== undefined) setTitleFontSize(s.title_font_size);
           if (s.ken_burns !== undefined) setKenBurns(s.ken_burns);
           if (s.ken_burns_speed !== undefined) setKenBurnsSpeed(s.ken_burns_speed);
+          if (s.background_filter !== undefined) setBgFilter(s.background_filter);
           if (s.bgs_per_track !== undefined) setBgsPerTrack(s.bgs_per_track);
         }
       } catch (err) {
@@ -287,11 +290,15 @@ export default function Home() {
       setColorTheme('Lo-fi / Chill');
       setCustomColor('');
       setKenBurns(true);
+      setKenBurnsSpeed('normal');
+      setBgFilter('none');
       setVisOpacity(0.8);
       setVisHeight(0.15);
       setVisYPos(0.92);
       setFontFamily('Inter');
       setTitleFontSize('Medium');
+      setBgsPerTrack(1);
+      setSelectedBgPaths([]);
     }
   };
 
@@ -359,6 +366,7 @@ export default function Home() {
         if (s.title_font_size !== undefined) setTitleFontSize(s.title_font_size);
         if (s.ken_burns !== undefined) setKenBurns(s.ken_burns);
         if (s.ken_burns_speed !== undefined) setKenBurnsSpeed(s.ken_burns_speed);
+        if (s.background_filter !== undefined) setBgFilter(s.background_filter);
         if (s.bgs_per_track !== undefined) setBgsPerTrack(s.bgs_per_track);
       }
       setShowProjectsModal(false);
@@ -407,6 +415,7 @@ export default function Home() {
           title_font_size: titleFontSize,
           ken_burns: kenBurns,
           ken_burns_speed: kenBurnsSpeed,
+          background_filter: bgFilter,
           bgs_per_track: bgsPerTrack,
           selected_bg_paths: selectedBgPaths
         }
@@ -676,7 +685,10 @@ export default function Home() {
           font_family: fontFamily,
           title_font_size: titleFontSize,
           ken_burns: kenBurns,
-          ken_burns_speed: kenBurnsSpeed
+          ken_burns_speed: kenBurnsSpeed,
+          background_filter: bgFilter,
+          bgs_per_track: bgsPerTrack,
+          selected_bg_paths: selectedBgPaths
         }
       };
       await musicApi.saveState(stateObj);
@@ -708,6 +720,37 @@ export default function Home() {
         output_songlist: '',
         error: err.message
       });
+    }
+  const getCssFilter = (filterName) => {
+    switch (filterName) {
+      case 'vintage':
+        return 'sepia(0.3) contrast(1.1) brightness(0.95) saturate(0.85)';
+      case 'cinematic':
+        return 'contrast(1.15) brightness(1.02) saturate(0.9)';
+      case 'noir':
+        return 'grayscale(1) contrast(1.4) brightness(0.85)';
+      case 'sepia':
+        return 'sepia(1) contrast(0.95) brightness(0.95)';
+      case 'warm':
+        return 'sepia(0.25) saturate(1.15) contrast(1.05)';
+      case 'cool':
+        return 'hue-rotate(15deg) saturate(0.9) brightness(0.95) contrast(1.05)';
+      case 'vivid':
+        return 'saturate(1.4) contrast(1.15)';
+      case 'grayscale':
+        return 'grayscale(1)';
+      case 'cyberpunk':
+        return 'hue-rotate(280deg) saturate(1.4) contrast(1.2)';
+      case 'vibrant':
+        return 'saturate(1.3) contrast(1.1)';
+      case 'dreamy':
+        return 'blur(1px) brightness(1.05) saturate(1.05)';
+      case 'blur':
+        return 'blur(4px)';
+      case 'negate':
+        return 'invert(1)';
+      default:
+        return 'none';
     }
   };
 
@@ -895,6 +938,7 @@ export default function Home() {
                         ? (kenBurnsSpeed === 'low' ? 'animate-kenburns-low' : 'animate-kenburns-normal') 
                         : ''
                     }`}
+                    style={{ filter: getCssFilter(bgFilter) }}
                   />
                 ) : (
                   <img 
@@ -905,6 +949,7 @@ export default function Home() {
                         ? (kenBurnsSpeed === 'low' ? 'animate-kenburns-low' : 'animate-kenburns-normal') 
                         : ''
                     }`}
+                    style={{ filter: getCssFilter(bgFilter) }}
                   />
                 )
               ) : (
@@ -915,7 +960,18 @@ export default function Home() {
               )}
               
               {/* Ambient Dark Overlay to ensure readability */}
-              {activeBg && <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/30 z-10 pointer-events-none" />}
+              {activeBg && (
+                <div 
+                  className="absolute inset-0 z-10 pointer-events-none"
+                  style={{
+                    background: bgFilter === 'vignette' 
+                      ? 'radial-gradient(circle, transparent 40%, rgba(0,0,0,0.65) 95%)' 
+                      : bgFilter === 'vignette_heavy'
+                      ? 'radial-gradient(circle, transparent 25%, rgba(0,0,0,0.85) 90%)'
+                      : 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.3) 100%)'
+                  }}
+                />
+              )}
               
               {/* Hover Play/Pause Overlay */}
               {tracks.length > 0 && (
@@ -1011,6 +1067,34 @@ export default function Home() {
                     <option value="low" className="bg-[#181922] text-white">Low Speed</option>
                   </select>
                 )}
+              </div>
+
+              {/* Background Filter Select */}
+              <div className="flex items-center gap-2">
+                <label htmlFor="bgFilterSelect" className="text-xs text-white/70">Filter</label>
+                <select
+                  id="bgFilterSelect"
+                  value={bgFilter}
+                  onChange={(e) => setBgFilter(e.target.value)}
+                  className="px-2 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-white cursor-pointer hover:bg-white/10 transition-all focus:outline-none"
+                >
+                  <option value="none" className="bg-[#181922] text-white">None (ปกติ)</option>
+                  <option value="vintage" className="bg-[#181922] text-white">Vintage (วินเทจ)</option>
+                  <option value="cinematic" className="bg-[#181922] text-white">Cinematic (ซีเนมาติก)</option>
+                  <option value="noir" className="bg-[#181922] text-white">Noir (ขาวดำคอนทราสต์)</option>
+                  <option value="sepia" className="bg-[#181922] text-white">Sepia (ซีเปีย)</option>
+                  <option value="warm" className="bg-[#181922] text-white">Warm (โทนอุ่น)</option>
+                  <option value="cool" className="bg-[#181922] text-white">Cool (โทนเย็น)</option>
+                  <option value="vivid" className="bg-[#181922] text-white">Vivid (สีสด)</option>
+                  <option value="grayscale" className="bg-[#181922] text-white">Grayscale (ขาวดำ)</option>
+                  <option value="cyberpunk" className="bg-[#181922] text-white">Cyberpunk (ไซเบอร์พังก์)</option>
+                  <option value="vibrant" className="bg-[#181922] text-white">Vibrant (สีอิ่มตัว)</option>
+                  <option value="dreamy" className="bg-[#181922] text-white">Dreamy (ฝันฟุ้ง)</option>
+                  <option value="blur" className="bg-[#181922] text-white">Blur (เบลอ)</option>
+                  <option value="vignette" className="bg-[#181922] text-white">Vignette (ขอบมืด)</option>
+                  <option value="vignette_heavy" className="bg-[#181922] text-white">Vignette Heavy (ขอบมืดหนา)</option>
+                  <option value="negate" className="bg-[#181922] text-white">Negative (เนกาทีฟ)</option>
+                </select>
               </div>
 
               {/* Watermark input */}
