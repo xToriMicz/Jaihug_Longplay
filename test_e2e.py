@@ -83,12 +83,19 @@ def run_e2e_test():
                 )
             assert response.status_code == 200, f"Upload failed: {response.text}"
             res_data = response.json()
-            uploaded_tracks.append({
+            track_entry = {
                 "id": f"track_{len(uploaded_tracks)+1}",
                 "filename": res_data["filename"],
                 "filepath": res_data["filepath"],
                 "duration": res_data["duration"]
-            })
+            }
+            if len(uploaded_tracks) == 1:
+                track_entry.update({
+                    "use_hook": True,
+                    "hook_start": 0.5,
+                    "hook_duration": 1.0
+                })
+            uploaded_tracks.append(track_entry)
             print(f"Uploaded track successfully: {res_data['filename']} (Duration: {res_data['duration']:.2f}s)")
 
         # Step 3: Upload background media

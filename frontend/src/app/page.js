@@ -38,6 +38,7 @@ export default function Home() {
   const isVertical = resolution.includes('Vertical');
 
   const [activeBgSelectorTrackId, setActiveBgSelectorTrackId] = useState(null);
+  const [activeHookSelectorTrackId, setActiveHookSelectorTrackId] = useState(null);
   const [bgDimensions, setBgDimensions] = useState({});
   const [selectedBgPaths, setSelectedBgPaths] = useState([]);
   const [bgsPerTrack, setBgsPerTrack] = useState(1);
@@ -61,6 +62,10 @@ export default function Home() {
 
   const updateTrackBackground = (trackId, bgPath) => {
     setTracks(prev => prev.map(t => t.id === trackId ? { ...t, background: bgPath } : t));
+  };
+
+  const updateTrackHook = (trackId, key, value) => {
+    setTracks(prev => prev.map(t => t.id === trackId ? { ...t, [key]: value } : t));
   };
 
   const toggleTrackBackgroundSelection = (trackId, filepath) => {
@@ -318,6 +323,7 @@ export default function Home() {
   useEffect(() => {
     const handleGlobalClick = () => {
       setActiveBgSelectorTrackId(null);
+      setActiveHookSelectorTrackId(null);
     };
     window.addEventListener('click', handleGlobalClick);
     return () => window.removeEventListener('click', handleGlobalClick);
@@ -326,6 +332,7 @@ export default function Home() {
   useEffect(() => {
     const handleGlobalClick = () => {
       setActiveBgSelectorTrackId(null);
+      setActiveHookSelectorTrackId(null);
     };
     window.addEventListener('click', handleGlobalClick);
     const currentBg = getCurrentTrackBackground();
@@ -1113,6 +1120,7 @@ export default function Home() {
                           onClick={(e) => {
                             e.stopPropagation();
                             setActiveBgSelectorTrackId(activeBgSelectorTrackId === track.id ? null : track.id);
+                            setActiveHookSelectorTrackId(null); // Close hook selector
                           }}
                           className={`px-2 py-1 text-[10px] font-semibold rounded-lg border transition-all flex items-center gap-1 cursor-pointer select-none ${track.background ? 'bg-[#ff007a]/10 border-[#ff007a]/30 text-[#ff007a]' : 'bg-white/5 border-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'}`}
                         >
@@ -1176,6 +1184,92 @@ export default function Home() {
                                 </button>
                               );
                             })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Hook/Trim Dropdown */}
+                      <div className="relative">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveHookSelectorTrackId(activeHookSelectorTrackId === track.id ? null : track.id);
+                            setActiveBgSelectorTrackId(null); // Close background dropdown
+                          }}
+                          className={`px-2 py-1 text-[10px] font-semibold rounded-lg border transition-all flex items-center gap-1 cursor-pointer select-none ${track.use_hook ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' : 'bg-white/5 border-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'}`}
+                        >
+                          <span className="text-xs">✂️</span>
+                          <span>
+                            {track.use_hook 
+                              ? `Hook (${Math.round(track.hook_duration || 30)}s)`
+                              : 'Full Song'
+                            }
+                          </span>
+                        </button>
+
+                        {activeHookSelectorTrackId === track.id && (
+                          <div 
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute right-0 mt-1.5 w-64 glass-panel border border-white/10 rounded-xl shadow-2xl p-3 z-50 flex flex-col gap-2 text-left"
+                          >
+                            <span className="text-[9px] text-white/30 font-bold px-1 py-0.5 uppercase tracking-wider block border-b border-white/[0.04] mb-1">
+                              ✂️ ตั้งค่าท่อนฮุก (Custom Hook)
+                            </span>
+                            
+                            {/* Toggle Use Hook */}
+                            <label className="flex items-center justify-between gap-2 text-xs text-white/80 cursor-pointer p-1 rounded hover:bg-white/5 select-none">
+                              <span>เปิดใช้งานท่อนฮุก</span>
+                              <input 
+                                type="checkbox"
+                                checked={!!track.use_hook}
+                                onChange={(e) => {
+                                  updateTrackHook(track.id, 'use_hook', e.target.checked);
+                                  if (e.target.checked) {
+                                    if (track.hook_start === undefined) updateTrackHook(track.id, 'hook_start', 0);
+                                    if (track.hook_duration === undefined) updateTrackHook(track.id, 'hook_duration', Math.min(30, Math.round(track.duration)));
+                                  }
+                                }}
+                                className="accent-[#ff007a] cursor-pointer"
+                              />
+                            </label>
+
+                            {track.use_hook && (
+                              <div className="flex flex-col gap-2 mt-1 border-t border-white/5 pt-2">
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[10px] text-white/50">เริ่มที่วินาทีที่ (Start Time):</label>
+                                  <input 
+                                    type="number"
+                                    min="0"
+                                    max={Math.max(0, Math.round(track.duration) - 1)}
+                                    value={track.hook_start !== undefined ? track.hook_start : 0}
+                                    onChange={(e) => {
+                                      const val = Math.max(0, Math.min(Math.round(track.duration) - 1, parseFloat(e.target.value) || 0));
+                                      updateTrackHook(track.id, 'hook_start', val);
+                                    }}
+                                    className="px-2 py-1 text-xs rounded bg-white/5 border border-white/10 text-white w-full focus:outline-none focus:border-[#ff007a]"
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[10px] text-white/50">ความยาวท่อน (Duration):</label>
+                                  <input 
+                                    type="number"
+                                    min="1"
+                                    max={Math.max(1, Math.round(track.duration) - (track.hook_start || 0))}
+                                    value={track.hook_duration !== undefined ? track.hook_duration : 30}
+                                    onChange={(e) => {
+                                      const maxDur = Math.max(1, Math.round(track.duration) - (track.hook_start || 0));
+                                      const val = Math.max(1, Math.min(maxDur, parseFloat(e.target.value) || 1));
+                                      updateTrackHook(track.id, 'hook_duration', val);
+                                    }}
+                                    className="px-2 py-1 text-xs rounded bg-white/5 border border-white/10 text-white w-full focus:outline-none focus:border-[#ff007a]"
+                                  />
+                                </div>
+                                <div className="text-[9px] text-white/40 mt-1 italic leading-tight">
+                                  * ความยาวเพลงจริง {Math.round(track.duration)} วินาที<br/>
+                                  * เล่นท่อน {Math.round(track.hook_start || 0)}s ถึง {Math.round((track.hook_start || 0) + (track.hook_duration || 30))}s
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

@@ -2,6 +2,7 @@ import os
 import uuid
 import json
 import logging
+import subprocess
 import threading
 import unicodedata
 from typing import List, Dict, Any
@@ -155,6 +156,7 @@ async def upload_file(file: UploadFile = File(...), file_type: str = Form(...)):
 
 def run_export_pipeline(state_data: Dict[str, Any]):
     global export_progress
+    temp_trimmed_files = []
     
     try:
         with progress_lock:
@@ -184,8 +186,46 @@ def run_export_pipeline(state_data: Dict[str, Any]):
         for t in tracks:
             rel_path = t["filepath"].lstrip("/")
             abs_path = os.path.join(BASE_DIR, rel_path)
+            track_duration = t.get("duration", 0.0)
+            
             if os.path.exists(abs_path):
-                audio_files.append(abs_path)
+                # Check if we should trim the track (Custom Hook)
+                if t.get("use_hook") and t.get("hook_start") is not None and t.get("hook_duration") is not None:
+                    hook_start = float(t["hook_start"])
+                    hook_dur = float(t["hook_duration"])
+                    
+                    temp_filename = f"trim_{uuid.uuid4().hex[:8]}_{os.path.basename(abs_path)}"
+                    temp_filepath = os.path.join(TEMP_DIR, temp_filename)
+                    
+                    logger.info(f"Trimming track {abs_path} from {hook_start}s for {hook_dur}s to {temp_filepath}")
+                    
+                    # Trim without re-encoding using stream copy
+                    trim_cmd = [
+                        "ffmpeg", "-y",
+                        "-ss", str(hook_start),
+                        "-t", str(hook_dur),
+                        "-i", abs_path,
+                        "-c", "copy",
+                        temp_filepath
+                    ]
+                    
+                    try:
+                        subprocess.run(trim_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                        trimmed_dur, _, _ = get_audio_info(temp_filepath)
+                        if trimmed_dur > 0:
+                            logger.info(f"Trimmed successfully! New duration: {trimmed_dur}s")
+                            audio_files.append(temp_filepath)
+                            temp_trimmed_files.append(temp_filepath)
+                            abs_path = temp_filepath
+                            track_duration = trimmed_dur
+                        else:
+                            logger.warning(f"Trimmed file was empty, falling back to original: {abs_path}")
+                            audio_files.append(abs_path)
+                    except Exception as err:
+                        logger.error(f"FFmpeg trim failed: {err}. Falling back to original: {abs_path}")
+                        audio_files.append(abs_path)
+                else:
+                    audio_files.append(abs_path)
                 
             # Resolve track background(s)
             bg_val = t.get("background")
@@ -203,7 +243,7 @@ def run_export_pipeline(state_data: Dict[str, Any]):
             
             processed_tracks.append({
                 "filepath": abs_path,
-                "duration": t.get("duration", 0.0),
+                "duration": track_duration,
                 "background": bg_abs,
                 "name": os.path.splitext(t["filename"])[0]
             })
@@ -308,6 +348,14 @@ def run_export_pipeline(state_data: Dict[str, Any]):
                 "step": "Failed",
                 "error": str(e)
             })
+    finally:
+        for f in temp_trimmed_files:
+            try:
+                if os.path.exists(f):
+                    os.remove(f)
+                    logger.info(f"Cleaned up temp trimmed file: {f}")
+            except Exception as ex:
+                logger.warning(f"Failed to clean up temp trimmed file {f}: {ex}")
 
 @app.post("/api/export")
 def start_export(background_tasks: BackgroundTasks, project_name: str = None):
