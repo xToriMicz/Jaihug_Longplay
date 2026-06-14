@@ -2422,8 +2422,8 @@ export default function Home() {
                               placeholder="ตัวอย่าง: เจ็บที่สุดคือการอยู่ แต่ไม่มีความหมาย..."
                               value={quoteOverlay.text}
                               onChange={(e) => setQuoteOverlay(prev => ({ ...prev, text: e.target.value }))}
-                              rows={2}
-                              className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-[#ff007a] resize-none"
+                              rows={4}
+                              className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-[#ff007a] resize-y min-h-[60px]"
                             />
                           </div>
                           
@@ -2512,9 +2512,9 @@ export default function Home() {
                                 <option value="1.25" className="bg-[#181922] text-white">1.25 เท่า</option>
                                 <option value="1.35" className="bg-[#181922] text-white">1.35 เท่า</option>
                                 <option value="1.5" className="bg-[#181922] text-white">1.50 เท่า</option>
-                                <option value="2.0" className="bg-[#181922] text-white">2.00 เท่า</option>
-                                <option value="5.0" className="bg-[#181922] text-white">5.00 เท่า</option>
-                                <option value="10.0" className="bg-[#181922] text-white">10.00 เท่า</option>
+                                <option value="2" className="bg-[#181922] text-white">2.00 เท่า</option>
+                                <option value="5" className="bg-[#181922] text-white">5.00 เท่า</option>
+                                <option value="10" className="bg-[#181922] text-white">10.00 เท่า</option>
                               </select>
                             </div>
                           </div>
