@@ -132,6 +132,25 @@ def test_new_quote_features():
     # For Small, q_base_font_size = 22. bg_font_size = 22 * 3.0 = 66
     assert r"\fs66\1a&HB0&" in ass_small
     
+    # Test artistic quote decorator
+    quote_artistic = {
+        "enabled": True,
+        "text": "เจ็บปวด\nเหลือเกิน",
+        "position_y": 0.25,
+        "position_x": 0.15,
+        "alignment": "left",
+        "font_size": "Medium",
+        "decorator_style": "artistic",
+        "highlight_color": "#ff007a",
+        "highlight_scale": 1.25
+    }
+    ass_artistic = compile_ass_content(subtitles, quote_artistic, settings, total_duration=10.0)
+    
+    # Check that both opening “ and closing ” dialogue lines are rendered
+    assert r"Dialogue: 0,0:00:00.00,0:00:10.00,QuoteStyle,,0,0,0,,{\an7\pos(" in ass_artistic
+    assert r"}“" in ass_artistic
+    assert r"}”" in ass_artistic
+    
     print("New quote features (alignment, position, decorators, decoupled font sizes) tests passed!")
 
 if __name__ == "__main__":

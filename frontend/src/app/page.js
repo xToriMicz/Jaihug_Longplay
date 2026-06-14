@@ -1499,41 +1499,77 @@ export default function Home() {
                     whiteSpace: 'pre-line'
                   }}
                 >
-                  {/* Large Background Quote Decorator */}
-                  {quoteOverlay.decorator_style === 'background' && (
-                    <span 
-                      className="absolute pointer-events-none select-none font-bold"
-                      style={{
-                        left: (quoteOverlay.alignment === 'left') ? '0px' : ((quoteOverlay.alignment === 'right') ? 'auto' : '50%'),
-                        right: (quoteOverlay.alignment === 'right') ? '0px' : 'auto',
-                        top: '-0.5em',
-                        transform: (quoteOverlay.alignment === 'center') ? 'translateX(-50%)' : 'none',
-                        fontSize: '3em',
-                        color: '#FFFFFF',
-                        opacity: 0.20,
-                        zIndex: -1,
-                        lineHeight: 1
-                      }}
-                    >
-                      “
-                    </span>
-                  )}
-                  
-                  {/* Inline Quote Decorator */}
-                  {quoteOverlay.decorator_style === 'inline' && (
-                    <span 
-                      className="font-bold inline-block mr-1 align-middle"
-                      style={{ 
-                        fontSize: `${(quoteOverlay.highlight_scale !== undefined ? quoteOverlay.highlight_scale : 1.25) * 1.2}em`,
-                        color: quoteOverlay.highlight_color || '#ff007a',
-                        textShadow: `0 0 10px ${(quoteOverlay.highlight_color || '#ff007a')}66, 2px 2px 4px rgba(0,0,0,0.8)`
-                      }}
-                    >
-                      “
-                    </span>
-                  )}
+                  {/* Artistic Style Quote Decorators */}
+                  {quoteOverlay.decorator_style === 'artistic' ? (
+                    <div className="relative inline-block max-w-full px-6 py-2">
+                      {/* Top-Left Quote */}
+                      <span 
+                        className="absolute select-none pointer-events-none font-bold text-white/90"
+                        style={{
+                          left: '0px',
+                          top: '-0.3em',
+                          fontSize: '2.5em',
+                          lineHeight: 1
+                        }}
+                      >
+                        “
+                      </span>
+                      
+                      {/* Main Text */}
+                      {renderHighlightedText(autoWrapText(quoteOverlay.text, quoteOverlay.font_size || 'Medium', true))}
+                      
+                      {/* Bottom-Right Quote */}
+                      <span 
+                        className="absolute select-none pointer-events-none font-bold text-white/90"
+                        style={{
+                          right: '0px',
+                          bottom: '-0.3em',
+                          fontSize: '2.5em',
+                          lineHeight: 1
+                        }}
+                      >
+                        ”
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Large Background Quote Decorator */}
+                      {quoteOverlay.decorator_style === 'background' && (
+                        <span 
+                          className="absolute pointer-events-none select-none font-bold"
+                          style={{
+                            left: (quoteOverlay.alignment === 'left') ? '0px' : ((quoteOverlay.alignment === 'right') ? 'auto' : '50%'),
+                            right: (quoteOverlay.alignment === 'right') ? '0px' : 'auto',
+                            top: '-0.5em',
+                            transform: (quoteOverlay.alignment === 'center') ? 'translateX(-50%)' : 'none',
+                            fontSize: '3em',
+                            color: '#FFFFFF',
+                            opacity: 0.20,
+                            zIndex: -1,
+                            lineHeight: 1
+                          }}
+                        >
+                          “
+                        </span>
+                      )}
+                      
+                      {/* Inline Quote Decorator */}
+                      {quoteOverlay.decorator_style === 'inline' && (
+                        <span 
+                          className="font-bold inline-block mr-1 align-middle"
+                          style={{ 
+                            fontSize: `${(quoteOverlay.highlight_scale !== undefined ? quoteOverlay.highlight_scale : 1.25) * 1.2}em`,
+                            color: quoteOverlay.highlight_color || '#ff007a',
+                            textShadow: `0 0 10px ${(quoteOverlay.highlight_color || '#ff007a')}66, 2px 2px 4px rgba(0,0,0,0.8)`
+                          }}
+                        >
+                          “
+                        </span>
+                      )}
 
-                  {renderHighlightedText(autoWrapText(quoteOverlay.text, quoteOverlay.font_size || 'Medium', true))}
+                      {renderHighlightedText(autoWrapText(quoteOverlay.text, quoteOverlay.font_size || 'Medium', true))}
+                    </>
+                  )}
                 </div>
               )}
 
@@ -2557,6 +2593,7 @@ export default function Home() {
                                 <option value="none" className="bg-[#181922] text-white">ไม่มี (None)</option>
                                 <option value="inline" className="bg-[#181922] text-white">เครื่องหมายด้านหน้า (Inline)</option>
                                 <option value="background" className="bg-[#181922] text-white">พื้นหลังโปร่งแสง (Background)</option>
+                                <option value="artistic" className="bg-[#181922] text-white">ศิลป์หัวท้าย (Artistic)</option>
                               </select>
                             </div>
                             <div>

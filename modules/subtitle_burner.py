@@ -335,6 +335,51 @@ def compile_ass_content(
                     f"Dialogue: 0,{format_time(0.0)},{format_time(total_duration)},QuoteStyle,,0,0,0,,{bg_line_text}"
                 )
                 
+            # Artistic Above/Below decorators (top-left “ and bottom-right ”)
+            elif q_decorator == "artistic":
+                lines_list = q_text.split('\n')
+                num_lines = len(lines_list)
+                
+                def estimate_width(t_str):
+                    width_px = 0.0
+                    for char in t_str:
+                        if 0x0E00 <= ord(char) <= 0x0E7F:
+                            if ord(char) in [0x0E31, 0x0E34, 0x0E35, 0x0E36, 0x0E37, 0x0E38, 0x0E39, 0x0E3A, 0x0E47, 0x0E48, 0x0E49, 0x0E4A, 0x0E4B, 0x0E4C, 0x0E4D, 0x0E4E]:
+                                continue
+                            width_px += q_font_size * 0.48
+                        else:
+                            width_px += q_font_size * 0.52
+                    return width_px
+                
+                max_w = max(estimate_width(l) for l in lines_list) if lines_list else 0
+                text_height = num_lines * q_font_size * 1.30
+                
+                if q_alignment == "left":
+                    x_left = x_pos
+                    x_right = x_pos + max_w
+                elif q_alignment == "right":
+                    x_right = x_pos
+                    x_left = x_pos - max_w
+                else:
+                    x_left = x_pos - max_w / 2.0
+                    x_right = x_pos + max_w / 2.0
+                    
+                bg_font_size = int(round(q_font_size * 2.5))
+                o_x = int(round(x_left - q_font_size * 0.6))
+                o_y = int(round(y - q_font_size * 0.3))
+                c_x = int(round(x_right + q_font_size * 0.1))
+                c_y = int(round(y + text_height - q_font_size * 0.8))
+                
+                bg_line_text = f"{{\\an7\\pos({o_x},{o_y})\\fs{bg_font_size}}}“"
+                fg_line_text = f"{{\\an7\\pos({c_x},{c_y})\\fs{bg_font_size}}}”"
+                
+                lines.append(
+                    f"Dialogue: 0,{format_time(0.0)},{format_time(total_duration)},QuoteStyle,,0,0,0,,{bg_line_text}"
+                )
+                lines.append(
+                    f"Dialogue: 0,{format_time(0.0)},{format_time(total_duration)},QuoteStyle,,0,0,0,,{fg_line_text}"
+                )
+                
             # Inline decorator prepending
             if q_decorator == "inline":
                 decorator_size = int(round(q_font_size * highlight_scale * 1.2))
