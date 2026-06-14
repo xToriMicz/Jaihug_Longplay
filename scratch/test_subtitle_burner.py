@@ -100,7 +100,39 @@ def test_new_quote_features():
     # Assert inline decorator is prepended
     assert r"{\fs77\1c&HFF0000&}“{\r}" in ass_inline
     
-    print("New quote features (alignment, position, decorators) tests passed!")
+    # Test custom quote font size Large
+    quote_large = {
+        "enabled": True,
+        "text": "เจ็บปวดเหลือเกิน",
+        "position_y": 0.25,
+        "position_x": 0.15,
+        "alignment": "left",
+        "font_size": "Large",
+        "decorator_style": "background",
+        "highlight_color": "#ff007a",
+        "highlight_scale": 1.25
+    }
+    ass_large = compile_ass_content(subtitles, quote_large, settings, total_duration=10.0)
+    # For Large, q_base_font_size = 43. bg_font_size = 43 * 3.0 = 129
+    assert r"\fs129\1a&HB0&" in ass_large
+    
+    # Test custom quote font size Small
+    quote_small = {
+        "enabled": True,
+        "text": "เจ็บปวดเหลือเกิน",
+        "position_y": 0.25,
+        "position_x": 0.15,
+        "alignment": "left",
+        "font_size": "Small",
+        "decorator_style": "background",
+        "highlight_color": "#ff007a",
+        "highlight_scale": 1.25
+    }
+    ass_small = compile_ass_content(subtitles, quote_small, settings, total_duration=10.0)
+    # For Small, q_base_font_size = 22. bg_font_size = 22 * 3.0 = 66
+    assert r"\fs66\1a&HB0&" in ass_small
+    
+    print("New quote features (alignment, position, decorators, decoupled font sizes) tests passed!")
 
 if __name__ == "__main__":
     test_color_conversion()

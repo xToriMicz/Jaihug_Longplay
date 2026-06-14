@@ -53,6 +53,7 @@ export default function Home() {
     position_x: 0.50,
     alignment: 'center',
     decorator_style: 'none',
+    font_size: 'Medium',
     highlight_color: '#ff007a',
     highlight_scale: 1.25
   });
@@ -293,6 +294,7 @@ export default function Home() {
       position_x: data.quote_overlay.position_x !== undefined ? data.quote_overlay.position_x : 0.50,
       alignment: data.quote_overlay.alignment || 'center',
       decorator_style: data.quote_overlay.decorator_style || 'none',
+      font_size: data.quote_overlay.font_size || 'Medium',
       highlight_color: data.quote_overlay.highlight_color || '#ff007a',
       highlight_scale: data.quote_overlay.highlight_scale !== undefined ? data.quote_overlay.highlight_scale : 1.25
     } : {
@@ -302,6 +304,7 @@ export default function Home() {
       position_x: 0.50,
       alignment: 'center',
       decorator_style: 'none',
+      font_size: 'Medium',
       highlight_color: '#ff007a',
       highlight_scale: 1.25
     });
@@ -1435,7 +1438,7 @@ export default function Home() {
                           : (subtitleSettings.font_family === 'Noto Sans Thai'
                             ? 'var(--font-noto-sans-thai), sans-serif'
                             : 'var(--font-inter), var(--font-sarabun), sans-serif'))),
-                    fontSize: subtitleSettings.font_size === 'Small' ? '2.2cqw' : (subtitleSettings.font_size === 'Large' ? '4.0cqw' : '3.0cqw'),
+                    fontSize: (quoteOverlay.font_size || 'Medium') === 'Small' ? '2.2cqw' : ((quoteOverlay.font_size || 'Medium') === 'Large' ? '4.0cqw' : '3.0cqw'),
                     textShadow: '2px 2px 4px rgba(0, 0, 0, 0.8), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
                     whiteSpace: 'pre-line'
                   }}
@@ -1474,7 +1477,7 @@ export default function Home() {
                     </span>
                   )}
 
-                  {renderHighlightedText(autoWrapText(quoteOverlay.text, subtitleSettings.font_size, true))}
+                  {renderHighlightedText(autoWrapText(quoteOverlay.text, quoteOverlay.font_size || 'Medium', true))}
                 </div>
               )}
 
@@ -2474,6 +2477,21 @@ export default function Home() {
                               </select>
                             </div>
                             <div>
+                              <label className="text-[10px] text-white/50 block mb-1">ขนาดฟอนต์คำคม</label>
+                              <select 
+                                value={quoteOverlay.font_size || 'Medium'}
+                                onChange={(e) => setQuoteOverlay(prev => ({ ...prev, font_size: e.target.value }))}
+                                className="w-full px-2 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-white cursor-pointer"
+                              >
+                                <option value="Small" className="bg-[#181922] text-white">เล็ก (Small)</option>
+                                <option value="Medium" className="bg-[#181922] text-white">กลาง (Medium)</option>
+                                <option value="Large" className="bg-[#181922] text-white">ใหญ่ (Large)</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
                               <label className="text-[10px] text-white/50 block mb-1">รูปแบบคำคม (Decorator)</label>
                               <select 
                                 value={quoteOverlay.decorator_style || 'none'}
@@ -2484,21 +2502,6 @@ export default function Home() {
                                 <option value="inline" className="bg-[#181922] text-white">เครื่องหมายด้านหน้า (Inline)</option>
                                 <option value="background" className="bg-[#181922] text-white">พื้นหลังโปร่งแสง (Background)</option>
                               </select>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="text-[10px] text-white/50 block mb-1">สีเน้นคำ (Highlight)</label>
-                              <div className="flex items-center gap-2 px-2 py-1 bg-white/5 border border-white/10 rounded-lg">
-                                <input 
-                                  type="color" 
-                                  value={quoteOverlay.highlight_color || '#ff007a'} 
-                                  onChange={(e) => setQuoteOverlay(prev => ({ ...prev, highlight_color: e.target.value }))}
-                                  className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
-                                />
-                                <span className="text-[10px] font-mono">{(quoteOverlay.highlight_color || '#ff007a').toUpperCase()}</span>
-                              </div>
                             </div>
                             <div>
                               <label className="text-[10px] text-white/50 block mb-1">ขนาดคำเน้น (Scale)</label>
@@ -2516,6 +2519,19 @@ export default function Home() {
                                 <option value="5" className="bg-[#181922] text-white">5.00 เท่า</option>
                                 <option value="10" className="bg-[#181922] text-white">10.00 เท่า</option>
                               </select>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] text-white/50 block mb-1">สีเน้นคำ (Highlight)</label>
+                            <div className="flex items-center gap-2 px-2 py-1 bg-white/5 border border-white/10 rounded-lg max-w-[50%]">
+                              <input 
+                                type="color" 
+                                value={quoteOverlay.highlight_color || '#ff007a'} 
+                                onChange={(e) => setQuoteOverlay(prev => ({ ...prev, highlight_color: e.target.value }))}
+                                className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
+                              />
+                              <span className="text-[10px] font-mono">{(quoteOverlay.highlight_color || '#ff007a').toUpperCase()}</span>
                             </div>
                           </div>
                         </>

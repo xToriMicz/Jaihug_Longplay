@@ -252,7 +252,12 @@ def compile_ass_content(
         if q_text:
             q_pos_y = float(quote_overlay.get("position_y", 0.20))
             q_margin_v = int(round(height * q_pos_y))
-            q_font_size = int(round(scaled_font_size * 0.9))
+            
+            q_font_size_str = quote_overlay.get("font_size", "Medium")
+            q_size_map = {"Small": 22, "Medium": 32, "Large": 43}
+            q_base_font_size = q_size_map.get(q_font_size_str, 32)
+            q_font_size = int(round(q_base_font_size * scale_factor))
+            
             lines.append(
                 f"Style: QuoteStyle,{font_family},{q_font_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,1.5,1,8,10,10,{q_margin_v},1"
             )
@@ -292,9 +297,14 @@ def compile_ass_content(
                 x_pos = x + int(round(box_width / 2.0))
                 
             q_text = auto_tag_thai_keywords(q_text)
-            q_font_size = int(round(scaled_font_size * 0.9))
+            
+            q_font_size_str = quote_overlay.get("font_size", "Medium")
+            q_size_map = {"Small": 22, "Medium": 32, "Large": 43}
+            q_base_font_size = q_size_map.get(q_font_size_str, 32)
+            q_font_size = int(round(q_base_font_size * scale_factor))
+            
             q_wrap_limit_map = {"Small": 42, "Medium": 31, "Large": 24}
-            q_max_chars = q_wrap_limit_map.get(settings.get("font_size", "Medium"), 31)
+            q_max_chars = q_wrap_limit_map.get(q_font_size_str, 31)
             q_text = auto_wrap_text(q_text, max_chars=q_max_chars)
             
             highlight_color = quote_overlay.get("highlight_color", "#ff007a")
