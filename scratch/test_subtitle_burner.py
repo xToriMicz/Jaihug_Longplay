@@ -78,9 +78,9 @@ def test_new_quote_features():
     ass_bg = compile_ass_content(subtitles, quote_bg, settings, total_duration=10.0)
     
     # Assert alignment code and position for Left alignment (7)
-    assert r"{\an7\pos(288,270)}" in ass_bg
+    assert r"{\an7\pos(-528,270)}" in ass_bg
     # Assert background decorator dialogue line is created, with font size and alpha
-    assert r"Dialogue: 0,0:00:00.00,0:00:10.00,QuoteStyle,,0,0,0,,{\an7\pos(288,254)\fs96\1a&HB0&}“" in ass_bg
+    assert r"Dialogue: 0,0:00:00.00,0:00:10.00,QuoteStyle,,0,0,0,,{\an7\pos(-528,254)\fs96\1a&HB0&}“" in ass_bg
     
     # Test Right Alignment and Inline decorator
     quote_inline = {
@@ -96,7 +96,7 @@ def test_new_quote_features():
     ass_inline = compile_ass_content(subtitles, quote_inline, settings, total_duration=10.0)
     
     # Assert alignment code and position for Right alignment (9)
-    assert r"{\an9\pos(1632,324)}" in ass_inline
+    assert r"{\an9\pos(2448,324)}" in ass_inline
     # Assert inline decorator is prepended
     assert r"{\fs77\1c&HFF0000&}“{\r}" in ass_inline
     

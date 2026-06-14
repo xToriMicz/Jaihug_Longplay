@@ -280,12 +280,16 @@ def compile_ass_content(
             x = int(round(width * q_pos_x))
             y = int(round(height * q_pos_y))
             
-            # Map alignment string to ASS tag
+            # Map alignment string to ASS tag and adjust coordinate for centered bounding box (85% of screen width)
+            box_width = width * 0.85
             align_tag = "8"
+            x_pos = x
             if q_alignment == "left":
                 align_tag = "7"
+                x_pos = x - int(round(box_width / 2.0))
             elif q_alignment == "right":
                 align_tag = "9"
+                x_pos = x + int(round(box_width / 2.0))
                 
             q_text = auto_tag_thai_keywords(q_text)
             q_font_size = int(round(scaled_font_size * 0.9))
@@ -316,7 +320,7 @@ def compile_ass_content(
             if q_decorator == "background":
                 bg_font_size = int(round(q_font_size * 3.0))
                 bg_y = y - int(round(q_font_size * 0.5))
-                bg_line_text = f"{{\\an{align_tag}\\pos({x},{bg_y})\\fs{bg_font_size}\\1a&HB0&}}“"
+                bg_line_text = f"{{\\an{align_tag}\\pos({x_pos},{bg_y})\\fs{bg_font_size}\\1a&HB0&}}“"
                 lines.append(
                     f"Dialogue: 0,{format_time(0.0)},{format_time(total_duration)},QuoteStyle,,0,0,0,,{bg_line_text}"
                 )
@@ -327,7 +331,7 @@ def compile_ass_content(
                 q_text_ass = f"{{\\fs{decorator_size}\\1c{ass_color}}}“{{\\r}} " + q_text_ass
                 
             # Main quote dialogue line
-            main_line_text = f"{{\\an{align_tag}\\pos({x},{y})}}{q_text_ass}"
+            main_line_text = f"{{\\an{align_tag}\\pos({x_pos},{y})}}{q_text_ass}"
             lines.append(
                 f"Dialogue: 0,{format_time(0.0)},{format_time(total_duration)},QuoteStyle,,0,0,0,,{main_line_text}"
             )

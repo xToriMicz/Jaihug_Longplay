@@ -1425,9 +1425,7 @@ export default function Home() {
                     width: '85%',
                     top: `${quoteOverlay.position_y * 100}%`,
                     textAlign: quoteOverlay.alignment || 'center',
-                    transform: (quoteOverlay.alignment === 'left') 
-                      ? 'none' 
-                      : ((quoteOverlay.alignment === 'right') ? 'translateX(-100%)' : 'translateX(-50%)'),
+                    transform: 'translateX(-50%)',
                     fontFamily: subtitleSettings.font_family === 'was@kaikhiea'
                       ? 'was@kaikhiea, var(--font-sarabun), sans-serif'
                       : (subtitleSettings.font_family === 'Mali' 
