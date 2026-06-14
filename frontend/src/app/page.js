@@ -34,6 +34,7 @@ export default function Home() {
   const [visYPos, setVisYPos] = useState(0.92); // Default Y position is 92% (bottom)
   const [fontFamily, setFontFamily] = useState('Inter');
   const [titleFontSize, setTitleFontSize] = useState('Medium');
+  const [autoBurnSubtitles, setAutoBurnSubtitles] = useState(false);
 
   const isVertical = resolution.includes('Vertical');
 
@@ -216,7 +217,8 @@ export default function Home() {
             ken_burns_speed: kenBurnsSpeed,
             background_filter: bgFilter,
             bgs_per_track: bgsPerTrack,
-            selected_bg_paths: selectedBgPaths
+            selected_bg_paths: selectedBgPaths,
+            auto_burn_subtitles: autoBurnSubtitles
           }
         };
         await musicApi.saveState(stateObj);
@@ -232,7 +234,8 @@ export default function Home() {
     tracks, backgrounds, activeBg, mainTitle, genreText, descText, watermark,
     resolution, fps, visStyle, colorTheme, customColor, visOpacity, visHeight,
     visYPos, fontFamily, titleFontSize, kenBurns, kenBurnsSpeed, bgFilter, bgsPerTrack,
-    selectedBgPaths, isSaving, isUploading, exportState.status, subtitles, quoteOverlay, subtitleSettings
+    selectedBgPaths, isSaving, isUploading, exportState.status, subtitles, quoteOverlay, subtitleSettings,
+    autoBurnSubtitles
   ]);
 
   const getCurrentTrackBackground = () => {
@@ -340,6 +343,7 @@ export default function Home() {
     setKenBurnsSpeed(s.ken_burns_speed !== undefined ? s.ken_burns_speed : 'normal');
     setBgFilter(s.background_filter !== undefined ? s.background_filter : 'none');
     setBgsPerTrack(s.bgs_per_track !== undefined ? s.bgs_per_track : 1);
+    setAutoBurnSubtitles(s.auto_burn_subtitles !== undefined ? s.auto_burn_subtitles : false);
   };
 
   // Load state from backend on mount
@@ -479,7 +483,8 @@ export default function Home() {
           ken_burns_speed: kenBurnsSpeed,
           background_filter: bgFilter,
           bgs_per_track: bgsPerTrack,
-          selected_bg_paths: selectedBgPaths
+          selected_bg_paths: selectedBgPaths,
+          auto_burn_subtitles: autoBurnSubtitles
         }
       };
       await musicApi.saveState(stateObj);
@@ -847,7 +852,8 @@ export default function Home() {
           ken_burns_speed: kenBurnsSpeed,
           background_filter: bgFilter,
           bgs_per_track: bgsPerTrack,
-          selected_bg_paths: selectedBgPaths
+          selected_bg_paths: selectedBgPaths,
+          auto_burn_subtitles: autoBurnSubtitles
         }
       };
       await musicApi.saveState(stateObj);
@@ -859,10 +865,59 @@ export default function Home() {
       const pollInterval = setInterval(async () => {
         try {
           const status = await musicApi.getExportStatus();
-          setExportState(status);
           
-          if (status.status === 'success' || status.status === 'failed') {
+          if (status.status === 'success') {
             clearInterval(pollInterval);
+            
+            const hasSubtitles = subtitles && subtitles.length > 0;
+            const hasQuote = quoteOverlay && quoteOverlay.enabled && quoteOverlay.text && quoteOverlay.text.trim();
+            
+            if (autoBurnSubtitles && (hasSubtitles || hasQuote)) {
+              setExportState({
+                status: 'processing',
+                progress: 100,
+                step: 'ฝังซับไตเติ้ลและคำคมโดยอัตโนมัติ...',
+                output_video: status.output_video,
+                output_timeline: status.output_timeline,
+                output_songlist: status.output_songlist,
+                error: ''
+              });
+              
+              try {
+                const baseVideoFilename = 'base_' + status.output_video.split('/').pop();
+                const result = await musicApi.burnSubtitles(
+                  baseVideoFilename,
+                  subtitles.map(s => ({
+                    ...s,
+                    start: parseFloat(s.start) || 0,
+                    end: parseFloat(s.end) || 0
+                  })),
+                  quoteOverlay,
+                  subtitleSettings
+                );
+                
+                setExportState(prev => ({
+                  ...prev,
+                  status: 'success',
+                  step: 'ส่งออกและฝังซับไตเติ้ลเสร็จสมบูรณ์!',
+                  output_video: result.output_video
+                }));
+              } catch (burnErr) {
+                console.error("Auto-burn error: ", burnErr);
+                setExportState(prev => ({
+                  ...prev,
+                  status: 'failed',
+                  error: 'ส่งออกวิดีโอสำเร็จ แต่การฝังซับไตเติ้ลโดยอัตโนมัติล้มเหลว: ' + burnErr.message
+                }));
+              }
+            } else {
+              setExportState(status);
+            }
+          } else if (status.status === 'failed') {
+            clearInterval(pollInterval);
+            setExportState(status);
+          } else {
+            setExportState(status);
           }
         } catch (pollErr) {
           console.error("Polling error: ", pollErr);
@@ -2775,6 +2830,19 @@ export default function Home() {
                           <span>ขั้นตอนที่ 2: ฝังซับไตเติลลงวิดีโอ</span>
                         </div>
                         <p className="text-[10px] text-white/40 leading-relaxed">หลังจาก Export วิดีโอหลัก (แบบไม่มีซับ) เรียบร้อยแล้ว สามารถกดปุ่มนี้เพื่อฝังซับไตเติลลงวิดีโอทันทีโดยไม่ต้องเรนเดอร์ภาพใหม่ ใช้เวลาเพียง 5-10 วินาที</p>
+                        
+                        <div className="flex items-center gap-2 my-1.5 p-2 rounded-xl bg-white/[0.02] border border-white/5">
+                          <input 
+                            type="checkbox" 
+                            id="autoBurnCheckbox"
+                            checked={autoBurnSubtitles}
+                            onChange={(e) => setAutoBurnSubtitles(e.target.checked)}
+                            className="w-4 h-4 accent-[#ff007a] cursor-pointer shrink-0"
+                          />
+                          <label htmlFor="autoBurnCheckbox" className="text-[10px] text-white/70 font-semibold cursor-pointer select-none leading-tight">
+                            ฝังซับไตเติลโดยอัตโนมัติทันทีที่ส่งออกวิดีโอหลักเสร็จ
+                          </label>
+                        </div>
                         
                         <button 
                           onClick={handleBurnSubtitles}

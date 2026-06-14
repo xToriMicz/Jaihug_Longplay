@@ -104,7 +104,8 @@ def load_default_state() -> Dict[str, Any]:
             "ken_burns_speed": "normal",
             "background_filter": "none",
             "bgs_per_track": 1,
-            "selected_bg_paths": []
+            "selected_bg_paths": [],
+            "auto_burn_subtitles": False
         }
     }
 
