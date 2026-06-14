@@ -272,6 +272,21 @@ def compile_ass_content(
     if quote_overlay and quote_overlay.get("enabled"):
         q_text = quote_overlay.get("text", "").strip()
         if q_text:
+            q_pos_x = float(quote_overlay.get("position_x", 0.50))
+            q_pos_y = float(quote_overlay.get("position_y", 0.20))
+            q_alignment = quote_overlay.get("alignment", "center")
+            q_decorator = quote_overlay.get("decorator_style", "none")
+            
+            x = int(round(width * q_pos_x))
+            y = int(round(height * q_pos_y))
+            
+            # Map alignment string to ASS tag
+            align_tag = "8"
+            if q_alignment == "left":
+                align_tag = "7"
+            elif q_alignment == "right":
+                align_tag = "9"
+                
             q_text = auto_tag_thai_keywords(q_text)
             q_font_size = int(round(scaled_font_size * 0.9))
             q_wrap_limit_map = {"Small": 42, "Medium": 31, "Large": 24}
@@ -280,6 +295,15 @@ def compile_ass_content(
             
             highlight_color = quote_overlay.get("highlight_color", "#ff007a")
             highlight_scale = float(quote_overlay.get("highlight_scale", 1.25))
+            
+            # Convert hex color to ASS color format
+            hex_str = highlight_color.strip().lstrip('#')
+            if len(hex_str) >= 6:
+                r, g, b = hex_str[0:2], hex_str[2:4], hex_str[4:6]
+            else:
+                r, g, b = "FF", "00", "7A"
+            ass_color = f"&H{b}{g}{r}&".upper()
+            
             q_text_ass = parse_highlight_tags(
                 q_text, 
                 q_font_size, 
@@ -287,8 +311,25 @@ def compile_ass_content(
                 highlight_scale=highlight_scale
             )
             q_text_ass = q_text_ass.replace('\n', '\\N')
+            
+            # Background decorator dialogue line
+            if q_decorator == "background":
+                bg_font_size = int(round(q_font_size * 3.0))
+                bg_y = y - int(round(q_font_size * 0.5))
+                bg_line_text = f"{{\\an{align_tag}\\pos({x},{bg_y})\\fs{bg_font_size}\\1a&HB0&}}“"
+                lines.append(
+                    f"Dialogue: 0,{format_time(0.0)},{format_time(total_duration)},QuoteStyle,,0,0,0,,{bg_line_text}"
+                )
+                
+            # Inline decorator prepending
+            if q_decorator == "inline":
+                decorator_size = int(round(q_font_size * highlight_scale * 1.2))
+                q_text_ass = f"{{\\fs{decorator_size}\\1c{ass_color}}}“{{\\r}} " + q_text_ass
+                
+            # Main quote dialogue line
+            main_line_text = f"{{\\an{align_tag}\\pos({x},{y})}}{q_text_ass}"
             lines.append(
-                f"Dialogue: 0,{format_time(0.0)},{format_time(total_duration)},QuoteStyle,,0,0,0,,{q_text_ass}"
+                f"Dialogue: 0,{format_time(0.0)},{format_time(total_duration)},QuoteStyle,,0,0,0,,{main_line_text}"
             )
             
     # Add subtitle dialogue lines

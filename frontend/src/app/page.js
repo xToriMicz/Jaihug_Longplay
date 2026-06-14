@@ -50,6 +50,9 @@ export default function Home() {
     text: '', 
     enabled: false, 
     position_y: 0.20,
+    position_x: 0.50,
+    alignment: 'center',
+    decorator_style: 'none',
     highlight_color: '#ff007a',
     highlight_scale: 1.25
   });
@@ -287,12 +290,18 @@ export default function Home() {
       text: data.quote_overlay.text || '',
       enabled: data.quote_overlay.enabled || false,
       position_y: data.quote_overlay.position_y !== undefined ? data.quote_overlay.position_y : 0.20,
+      position_x: data.quote_overlay.position_x !== undefined ? data.quote_overlay.position_x : 0.50,
+      alignment: data.quote_overlay.alignment || 'center',
+      decorator_style: data.quote_overlay.decorator_style || 'none',
       highlight_color: data.quote_overlay.highlight_color || '#ff007a',
       highlight_scale: data.quote_overlay.highlight_scale !== undefined ? data.quote_overlay.highlight_scale : 1.25
     } : {
       text: '',
       enabled: false,
       position_y: 0.20,
+      position_x: 0.50,
+      alignment: 'center',
+      decorator_style: 'none',
       highlight_color: '#ff007a',
       highlight_scale: 1.25
     });
@@ -1410,11 +1419,15 @@ export default function Home() {
               {/* Quote/Status Live Overlay */}
               {quoteOverlay.enabled && quoteOverlay.text && (
                 <div 
-                  className="absolute z-30 text-center transform -translate-x-1/2 pointer-events-none select-none text-white px-4 max-w-[85%] break-words"
+                  className="absolute z-30 pointer-events-none select-none text-white px-4 max-w-[85%] break-words animate-fade-in"
                   style={{
-                    left: '50%',
+                    left: `${(quoteOverlay.position_x !== undefined ? quoteOverlay.position_x : 0.50) * 100}%`,
                     width: '85%',
                     top: `${quoteOverlay.position_y * 100}%`,
+                    textAlign: quoteOverlay.alignment || 'center',
+                    transform: (quoteOverlay.alignment === 'left') 
+                      ? 'none' 
+                      : ((quoteOverlay.alignment === 'right') ? 'translateX(-100%)' : 'translateX(-50%)'),
                     fontFamily: subtitleSettings.font_family === 'was@kaikhiea'
                       ? 'was@kaikhiea, var(--font-sarabun), sans-serif'
                       : (subtitleSettings.font_family === 'Mali' 
@@ -1429,6 +1442,40 @@ export default function Home() {
                     whiteSpace: 'pre-line'
                   }}
                 >
+                  {/* Large Background Quote Decorator */}
+                  {quoteOverlay.decorator_style === 'background' && (
+                    <span 
+                      className="absolute pointer-events-none select-none font-bold"
+                      style={{
+                        left: (quoteOverlay.alignment === 'left') ? '0px' : ((quoteOverlay.alignment === 'right') ? 'auto' : '50%'),
+                        right: (quoteOverlay.alignment === 'right') ? '0px' : 'auto',
+                        top: '-0.5em',
+                        transform: (quoteOverlay.alignment === 'center') ? 'translateX(-50%)' : 'none',
+                        fontSize: '3em',
+                        color: '#FFFFFF',
+                        opacity: 0.20,
+                        zIndex: -1,
+                        lineHeight: 1
+                      }}
+                    >
+                      “
+                    </span>
+                  )}
+                  
+                  {/* Inline Quote Decorator */}
+                  {quoteOverlay.decorator_style === 'inline' && (
+                    <span 
+                      className="font-bold inline-block mr-1 align-middle"
+                      style={{ 
+                        fontSize: `${(quoteOverlay.highlight_scale !== undefined ? quoteOverlay.highlight_scale : 1.25) * 1.2}em`,
+                        color: quoteOverlay.highlight_color || '#ff007a',
+                        textShadow: `0 0 10px ${(quoteOverlay.highlight_color || '#ff007a')}66, 2px 2px 4px rgba(0,0,0,0.8)`
+                      }}
+                    >
+                      “
+                    </span>
+                  )}
+
                   {renderHighlightedText(autoWrapText(quoteOverlay.text, subtitleSettings.font_size, true))}
                 </div>
               )}
@@ -2381,21 +2428,67 @@ export default function Home() {
                               className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-[#ff007a] resize-none"
                             />
                           </div>
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <label className="text-[10px] text-white/50 block">ตำแหน่งแนวตั้ง (Y-POS)</label>
-                              <span className="text-[10px] font-bold text-[#ff007a] tabular-nums">{Math.round(quoteOverlay.position_y * 100)}%</span>
+                          
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <div className="flex justify-between items-center mb-1">
+                                <label className="text-[10px] text-white/50 block">แนวตั้ง (Y-POS)</label>
+                                <span className="text-[10px] font-bold text-[#ff007a] tabular-nums">{Math.round((quoteOverlay.position_y !== undefined ? quoteOverlay.position_y : 0.20) * 100)}%</span>
+                              </div>
+                              <input 
+                                type="range" 
+                                min="0.05" 
+                                max="0.60" 
+                                step="0.01" 
+                                value={quoteOverlay.position_y !== undefined ? quoteOverlay.position_y : 0.20} 
+                                onChange={(e) => setQuoteOverlay(prev => ({ ...prev, position_y: parseFloat(e.target.value) }))}
+                                className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#ff007a]"
+                              />
                             </div>
-                            <input 
-                              type="range" 
-                              min="0.05" 
-                              max="0.40" 
-                              step="0.01" 
-                              value={quoteOverlay.position_y} 
-                              onChange={(e) => setQuoteOverlay(prev => ({ ...prev, position_y: parseFloat(e.target.value) }))}
-                              className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#ff007a]"
-                            />
+                            <div>
+                              <div className="flex justify-between items-center mb-1">
+                                <label className="text-[10px] text-white/50 block">แนวนอน (X-POS)</label>
+                                <span className="text-[10px] font-bold text-[#ff007a] tabular-nums">{Math.round((quoteOverlay.position_x !== undefined ? quoteOverlay.position_x : 0.50) * 100)}%</span>
+                              </div>
+                              <input 
+                                type="range" 
+                                min="0.05" 
+                                max="0.95" 
+                                step="0.01" 
+                                value={quoteOverlay.position_x !== undefined ? quoteOverlay.position_x : 0.50} 
+                                onChange={(e) => setQuoteOverlay(prev => ({ ...prev, position_x: parseFloat(e.target.value) }))}
+                                className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#ff007a]"
+                              />
+                            </div>
                           </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-[10px] text-white/50 block mb-1">การจัดวางข้อความ</label>
+                              <select 
+                                value={quoteOverlay.alignment || 'center'}
+                                onChange={(e) => setQuoteOverlay(prev => ({ ...prev, alignment: e.target.value }))}
+                                className="w-full px-2 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-white cursor-pointer"
+                              >
+                                <option value="left" className="bg-[#181922] text-white">ชิดซ้าย (Left)</option>
+                                <option value="center" className="bg-[#181922] text-white">กึ่งกลาง (Center)</option>
+                                <option value="right" className="bg-[#181922] text-white">ชิดขวา (Right)</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-white/50 block mb-1">รูปแบบคำคม (Decorator)</label>
+                              <select 
+                                value={quoteOverlay.decorator_style || 'none'}
+                                onChange={(e) => setQuoteOverlay(prev => ({ ...prev, decorator_style: e.target.value }))}
+                                className="w-full px-2 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-white cursor-pointer"
+                              >
+                                <option value="none" className="bg-[#181922] text-white">ไม่มี (None)</option>
+                                <option value="inline" className="bg-[#181922] text-white">เครื่องหมายด้านหน้า (Inline)</option>
+                                <option value="background" className="bg-[#181922] text-white">พื้นหลังโปร่งแสง (Background)</option>
+                              </select>
+                            </div>
+                          </div>
+
                           <div className="grid grid-cols-2 gap-3">
                             <div>
                               <label className="text-[10px] text-white/50 block mb-1">สีเน้นคำ (Highlight)</label>
@@ -2421,6 +2514,9 @@ export default function Home() {
                                 <option value="1.25" className="bg-[#181922] text-white">1.25 เท่า</option>
                                 <option value="1.35" className="bg-[#181922] text-white">1.35 เท่า</option>
                                 <option value="1.5" className="bg-[#181922] text-white">1.50 เท่า</option>
+                                <option value="2.0" className="bg-[#181922] text-white">2.00 เท่า</option>
+                                <option value="5.0" className="bg-[#181922] text-white">5.00 เท่า</option>
+                                <option value="10.0" className="bg-[#181922] text-white">10.00 เท่า</option>
                               </select>
                             </div>
                           </div>

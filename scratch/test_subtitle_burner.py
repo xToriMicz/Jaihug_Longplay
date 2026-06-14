@@ -60,9 +60,52 @@ def test_quote_highlighting():
     
     print("Quote highlighting tests passed!")
 
+def test_new_quote_features():
+    subtitles = []
+    settings = {"font_family": "Mali", "font_size": "Medium"}
+    
+    # Test Left Alignment, custom X-POS, and Background decorator
+    quote_bg = {
+        "enabled": True,
+        "text": "เจ็บปวดเหลือเกิน",
+        "position_y": 0.25,
+        "position_x": 0.15,
+        "alignment": "left",
+        "decorator_style": "background",
+        "highlight_color": "#ff007a",
+        "highlight_scale": 1.25
+    }
+    ass_bg = compile_ass_content(subtitles, quote_bg, settings, total_duration=10.0)
+    
+    # Assert alignment code and position for Left alignment (7)
+    assert r"{\an7\pos(288,270)}" in ass_bg
+    # Assert background decorator dialogue line is created, with font size and alpha
+    assert r"Dialogue: 0,0:00:00.00,0:00:10.00,QuoteStyle,,0,0,0,,{\an7\pos(288,254)\fs96\1a&HB0&}“" in ass_bg
+    
+    # Test Right Alignment and Inline decorator
+    quote_inline = {
+        "enabled": True,
+        "text": "คิดถึงเธอมาก",
+        "position_y": 0.30,
+        "position_x": 0.85,
+        "alignment": "right",
+        "decorator_style": "inline",
+        "highlight_color": "#0000ff", # blue
+        "highlight_scale": 2.0
+    }
+    ass_inline = compile_ass_content(subtitles, quote_inline, settings, total_duration=10.0)
+    
+    # Assert alignment code and position for Right alignment (9)
+    assert r"{\an9\pos(1632,324)}" in ass_inline
+    # Assert inline decorator is prepended
+    assert r"{\fs77\1c&HFF0000&}“{\r}" in ass_inline
+    
+    print("New quote features (alignment, position, decorators) tests passed!")
+
 if __name__ == "__main__":
     test_color_conversion()
     test_karaoke_highlight()
     test_ass_compiler()
     test_quote_highlighting()
+    test_new_quote_features()
     print("All subtitle burner tests passed successfully!")
