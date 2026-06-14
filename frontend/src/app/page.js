@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, Pause, Plus, Trash2, Sliders, Palette, Video, Music, Image as ImageIcon,
   ChevronRight, Save, Download, RotateCcw, AlertCircle, Sparkles, Loader2, ArrowRight, Volume2,
-  FolderOpen, Check
+  FolderOpen, Check, Clock
 } from 'lucide-react';
 import { musicApi } from '../lib/api';
 import CanvasVisualizer, { getHexColor, THEME_COLORS } from '../components/canvas_visualizer';
@@ -43,6 +43,31 @@ export default function Home() {
   const [selectedBgPaths, setSelectedBgPaths] = useState([]);
   const [bgsPerTrack, setBgsPerTrack] = useState(1);
   const [autoSaveStatus, setAutoSaveStatus] = useState("Saved");
+
+  // Subtitle / Lyrics / Quote states
+  const [subtitles, setSubtitles] = useState([]);
+  const [quoteOverlay, setQuoteOverlay] = useState({ 
+    text: '', 
+    enabled: false, 
+    position_y: 0.20,
+    highlight_color: '#ff007a',
+    highlight_scale: 1.25
+  });
+  const [subtitleSettings, setSubtitleSettings] = useState({
+    font_family: 'Mali',
+    font_size: 'Medium',
+    color: '#FFFFFF',
+    outline_color: '#000000',
+    outline_width: 2,
+    position_y: 0.80,
+    effect: 'Static Shadow', // 'Static Shadow', 'Karaoke Highlight', 'Karaoke Glow'
+    show_background_box: false,
+    background_box_color: '#00000080'
+  });
+  const [openrouterApiKey, setOpenrouterApiKey] = useState('');
+  const [activeTab, setActiveTab] = useState('settings'); // settings, subtitles
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isBurning, setIsBurning] = useState(false);
 
   // UI states
   const [isUploading, setIsUploading] = useState(false);
@@ -160,6 +185,13 @@ export default function Home() {
           tracks,
           backgrounds,
           active_background: activeBg,
+          subtitles: subtitles.map(s => ({
+            ...s,
+            start: parseFloat(s.start) || 0,
+            end: parseFloat(s.end) || 0
+          })),
+          quote_overlay: quoteOverlay,
+          subtitle_settings: subtitleSettings,
           settings: {
             main_title: mainTitle,
             genre: genreText,
@@ -195,7 +227,7 @@ export default function Home() {
     tracks, backgrounds, activeBg, mainTitle, genreText, descText, watermark,
     resolution, fps, visStyle, colorTheme, customColor, visOpacity, visHeight,
     visYPos, fontFamily, titleFontSize, kenBurns, kenBurnsSpeed, bgFilter, bgsPerTrack,
-    selectedBgPaths, isSaving, isUploading, exportState.status
+    selectedBgPaths, isSaving, isUploading, exportState.status, subtitles, quoteOverlay, subtitleSettings
   ]);
 
   const getCurrentTrackBackground = () => {
@@ -248,6 +280,33 @@ export default function Home() {
     }
     
     setActiveBg(data.active_background || '');
+
+    // Restore subtitles, quote overlays & subtitle settings
+    setSubtitles(data.subtitles || []);
+    setQuoteOverlay(data.quote_overlay ? {
+      text: data.quote_overlay.text || '',
+      enabled: data.quote_overlay.enabled || false,
+      position_y: data.quote_overlay.position_y !== undefined ? data.quote_overlay.position_y : 0.20,
+      highlight_color: data.quote_overlay.highlight_color || '#ff007a',
+      highlight_scale: data.quote_overlay.highlight_scale !== undefined ? data.quote_overlay.highlight_scale : 1.25
+    } : {
+      text: '',
+      enabled: false,
+      position_y: 0.20,
+      highlight_color: '#ff007a',
+      highlight_scale: 1.25
+    });
+    setSubtitleSettings(data.subtitle_settings || {
+      font_family: 'Mali',
+      font_size: 'Medium',
+      color: '#FFFFFF',
+      outline_color: '#000000',
+      outline_width: 2,
+      position_y: 0.80,
+      effect: 'Static Shadow',
+      show_background_box: false,
+      background_box_color: '#00000080'
+    });
     
     // settings fallbacks
     setMainTitle(s.main_title !== undefined ? s.main_title : 'เจ็บจนไม่รู้สึกอะไร...');
@@ -272,6 +331,9 @@ export default function Home() {
 
   // Load state from backend on mount
   useEffect(() => {
+    const savedKey = localStorage.getItem('openrouter_api_key') || '';
+    setOpenrouterApiKey(savedKey);
+
     async function loadState() {
       try {
         const data = await musicApi.getState();
@@ -286,6 +348,7 @@ export default function Home() {
       }
     }
     loadState();
+    fetchProjects();
   }, []);
 
   const [projectList, setProjectList] = useState([]);
@@ -335,9 +398,7 @@ export default function Home() {
       setActiveHookSelectorTrackId(null);
     };
     window.addEventListener('click', handleGlobalClick);
-    const currentBg = getCurrentTrackBackground();
-
-  return () => window.removeEventListener('click', handleGlobalClick);
+    return () => window.removeEventListener('click', handleGlobalClick);
   }, []);
 
   const handleLoadProject = async (name) => {
@@ -379,6 +440,13 @@ export default function Home() {
         tracks,
         backgrounds,
         active_background: activeBg,
+        subtitles: subtitles.map(s => ({
+          ...s,
+          start: parseFloat(s.start) || 0,
+          end: parseFloat(s.end) || 0
+        })),
+        quote_overlay: quoteOverlay,
+        subtitle_settings: subtitleSettings,
         settings: {
           main_title: mainTitle,
           genre: genreText,
@@ -521,9 +589,10 @@ export default function Home() {
       // Switch track and play immediately
       currentTrackIndexRef.current = index;
       setCurrentTrackIndex(index);
-      setCurrentTime(0);
+      const startPos = tracks[index].use_hook ? (tracks[index].hook_start || 0) : 0;
+      setCurrentTime(startPos);
       audio.src = musicApi.getBaseUrl() + tracks[index].filepath;
-      audio.currentTime = 0;
+      audio.currentTime = startPos;
       audio.play().then(() => {
         setIsPlaying(true);
         startProgressTracker();
@@ -537,8 +606,15 @@ export default function Home() {
       const audio = audioRef.current;
       if (audio) {
         setCurrentTime(audio.currentTime);
-        // If track finished, play next using up-to-date ref value to avoid stale closures
-        if (audio.ended) {
+        // If track finished (either naturally or hook duration exceeded), play next
+        const activeTrack = tracks[currentTrackIndexRef.current];
+        const hasEnded = audio.ended || (
+          activeTrack && 
+          activeTrack.use_hook && 
+          audio.currentTime >= (activeTrack.hook_start || 0) + (activeTrack.hook_duration || 30)
+        );
+        
+        if (hasEnded) {
           const nextIndex = currentTrackIndexRef.current + 1;
           if (nextIndex < tracks.length) {
             handleTrackChange(nextIndex);
@@ -579,36 +655,63 @@ export default function Home() {
   };
 
   const getPlaylistDuration = () => {
-    return tracks.reduce((sum, t) => sum + t.duration, 0);
+    return tracks.reduce((sum, t) => {
+      const d = t.use_hook ? (t.hook_duration || 30) : (t.duration || 0);
+      return sum + d;
+    }, 0);
   };
 
   // Get current play position in overall playlist
   const getOverallCurrentTime = () => {
     let sum = 0;
     for (let i = 0; i < currentTrackIndex; i++) {
-      sum += tracks[i].duration;
+      if (tracks[i]) {
+        const trackDuration = tracks[i].use_hook 
+          ? (tracks[i].hook_duration || 30) 
+          : (tracks[i].duration || 0);
+        sum += trackDuration;
+      }
     }
-    return sum + currentTime;
+    
+    const activeTrack = tracks[currentTrackIndex];
+    const trackElapsed = activeTrack && activeTrack.use_hook
+      ? Math.max(0, currentTime - (activeTrack.hook_start || 0))
+      : currentTime;
+      
+    return sum + trackElapsed;
   };
 
   const handleTimelineScrub = (e) => {
     const targetOverallTime = parseFloat(e.target.value);
     let accum = 0;
     let targetTrackIdx = 0;
+    let trackLocalTime = 0;
     
     // Find which track contains this time
     for (let i = 0; i < tracks.length; i++) {
-      if (accum + tracks[i].duration >= targetOverallTime) {
+      const trackDuration = tracks[i].use_hook 
+        ? (tracks[i].hook_duration || 30) 
+        : (tracks[i].duration || 0);
+        
+      if (accum + trackDuration >= targetOverallTime) {
         targetTrackIdx = i;
+        const elapsedInTrack = targetOverallTime - accum;
+        trackLocalTime = tracks[i].use_hook
+          ? (tracks[i].hook_start || 0) + elapsedInTrack
+          : elapsedInTrack;
         break;
       }
-      accum += tracks[i].duration;
+      accum += trackDuration;
       if (i === tracks.length - 1) {
         targetTrackIdx = i;
+        const elapsedInTrack = targetOverallTime - accum;
+        trackLocalTime = tracks[i].use_hook
+          ? (tracks[i].hook_start || 0) + elapsedInTrack
+          : elapsedInTrack;
       }
     }
     
-    const trackLocalTime = targetOverallTime - accum;
+    currentTrackIndexRef.current = targetTrackIdx;
     setCurrentTrackIndex(targetTrackIdx);
     setCurrentTime(trackLocalTime);
     
@@ -650,6 +753,13 @@ export default function Home() {
         tracks,
         backgrounds,
         active_background: activeBg,
+        subtitles: subtitles.map(s => ({
+          ...s,
+          start: parseFloat(s.start) || 0,
+          end: parseFloat(s.end) || 0
+        })),
+        quote_overlay: quoteOverlay,
+        subtitle_settings: subtitleSettings,
         settings: {
           main_title: mainTitle,
           genre: genreText,
@@ -704,6 +814,274 @@ export default function Home() {
     }
   };
 
+  const handleAiTranscribe = async () => {
+    if (!openrouterApiKey) {
+      alert("กรุณากรอก OpenRouter API Key ก่อนใช้งาน");
+      return;
+    }
+    if (tracks.length === 0) {
+      alert("กรุณาอัพโหลดและเพิ่มเพลงใน Playlist ก่อน");
+      return;
+    }
+    
+    setIsTranscribing(true);
+    try {
+      const activeTrack = tracks[0];
+      const result = await musicApi.transcribeLyrics(
+        activeTrack.filepath,
+        openrouterApiKey,
+        activeTrack.use_hook,
+        activeTrack.hook_start || 0,
+        activeTrack.hook_duration || 30
+      );
+      setSubtitles(result.subtitles || []);
+      alert("เอไอแกะเนื้อร้องพร้อมเวลาเรียบร้อยแล้ว!");
+    } catch (err) {
+      console.error(err);
+      alert("การแกะเนื้อร้องล้มเหลว: " + err.message);
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const handleSubtitleImport = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const result = await musicApi.parseSubtitles(file);
+      setSubtitles(result.subtitles || []);
+      alert("นำเข้าไฟล์ซับไตเติลสำเร็จ!");
+    } catch (err) {
+      console.error(err);
+      alert("นำเข้าล้มเหลว: " + err.message);
+    }
+  };
+
+  const handleSubtitleExport = () => {
+    if (subtitles.length === 0) {
+      alert("ไม่มีข้อมูลคำบรรยายสำหรับการส่งออก");
+      return;
+    }
+    
+    const formatSRTTime = (seconds) => {
+      const totalMs = Math.round(seconds * 1000);
+      const ms = totalMs % 1000;
+      const totalSecs = Math.floor(totalMs / 1000);
+      const s = totalSecs % 60;
+      const totalMins = Math.floor(totalSecs / 60);
+      const m = totalMins % 60;
+      const h = Math.floor(totalMins / 60);
+      
+      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')},${ms.toString().padStart(3, '0')}`;
+    };
+    
+    // Sort subtitles chronologically
+    const sortedSubs = [...subtitles].sort((a, b) => parseFloat(a.start) - parseFloat(b.start));
+    
+    let srtContent = "";
+    sortedSubs.forEach((sub, idx) => {
+      const startSec = parseFloat(sub.start) || 0;
+      const endSec = parseFloat(sub.end) || 0;
+      
+      srtContent += `${idx + 1}\n`;
+      srtContent += `${formatSRTTime(startSec)} --> ${formatSRTTime(endSec)}\n`;
+      srtContent += `${sub.text.replace(/\r?\n/g, '\n')}\n\n`;
+    });
+    
+    const blob = new Blob([srtContent], { type: "text/srt;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const filename = (mainTitle.trim() || "subtitles") + ".srt";
+    link.setAttribute("href", url);
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleBurnSubtitles = async () => {
+    if (!exportState.output_video) {
+      alert("กรุณาทำการ Export Video (รอบแรก) เพื่อสร้างวิดีโอตั้งต้นก่อนทำการฝังซับไตเติล");
+      return;
+    }
+    setIsBurning(true);
+    try {
+      const baseVideoFilename = 'base_' + exportState.output_video.split('/').pop();
+      const result = await musicApi.burnSubtitles(
+        baseVideoFilename,
+        subtitles.map(s => ({
+          ...s,
+          start: parseFloat(s.start) || 0,
+          end: parseFloat(s.end) || 0
+        })),
+        quoteOverlay,
+        subtitleSettings
+      );
+      
+      // Update exportState with the new video url
+      setExportState(prev => ({
+        ...prev,
+        output_video: result.output_video
+      }));
+      alert("ฝังซับไตเติลและสเตตัสลงในวิดีโอสำเร็จ!");
+    } catch (err) {
+      console.error(err);
+      alert("ฝังซับไตเติลล้มเหลว: " + err.message);
+    } finally {
+      setIsBurning(false);
+    }
+  };
+
+  const updateSub = (index, key, value) => {
+    setSubtitles(prev => prev.map((sub, idx) => idx === index ? { ...sub, [key]: value } : sub));
+  };
+
+  const addSubLine = () => {
+    setSubtitles(prev => {
+      const lastSub = prev[prev.length - 1];
+      const nextStart = lastSub ? lastSub.end : 0.0;
+      return [...prev, { start: nextStart, end: nextStart + 3.0, text: 'เนื้อร้องใหม่' }];
+    });
+  };
+
+  const removeSub = (index) => {
+    setSubtitles(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const autoWrapText = (text, fontSizeStr = 'Medium', isQuote = false) => {
+    if (!text) return text;
+    if (text.includes('\n') || text.includes('\\N')) return text; // Respect manual wrapping
+    
+    let wrapLimitMap = { Small: 38, Medium: 28, Large: 22 };
+    if (isQuote) {
+      wrapLimitMap = { Small: 42, Medium: 31, Large: 24 };
+    }
+    const maxChars = wrapLimitMap[fontSizeStr] || (isQuote ? 31 : 28);
+    
+    if (text.length <= maxChars) return text;
+    
+    // Wrap by space if there is any
+    if (text.includes(' ')) {
+      const words = text.split(' ');
+      const lines = [];
+      let currentLine = [];
+      let currentLen = 0;
+      for (const word of words) {
+        const wordLen = word.length;
+        if (currentLen + wordLen + (currentLine.length > 0 ? 1 : 0) <= maxChars) {
+          currentLine.push(word);
+          currentLen += wordLen + (currentLine.length > 1 ? 1 : 0);
+        } else {
+          if (currentLine.length > 0) {
+            lines.push(currentLine.join(' '));
+          }
+          currentLine = [word];
+          currentLen = wordLen;
+        }
+      }
+      if (currentLine.length > 0) {
+        lines.push(currentLine.join(' '));
+      }
+      return lines.join('\n');
+    }
+    
+    // Safe Thai wrap fallback
+    const CANNOT_START_LINE = new Set([
+      '\u0e30', '\u0e31', '\u0e32', '\u0e33', '\u0e34', '\u0e35', '\u0e36', '\u0e37', '\u0e38', '\u0e39', '\u0e3a',  // Vowels
+      '\u0e47', '\u0e48', '\u0e49', '\u0e4a', '\u0e4b', '\u0e4c', '\u0e4d', '\u0e4e',  // Tone marks & diacritics
+      '\u0e46', // ๆ Mai Yamok
+      '\u0e45' // ๅ Lakkhang Yao
+    ]);
+    const LEADING_VOWELS = new Set(['\u0e40', '\u0e41', '\u0e42', '\u0e43', '\u0e44']); // เ, แ, โ, ใ, ไ
+
+    const thaiWrapLine = (t, limit) => {
+      if (t.length <= limit) return t;
+      
+      let splitIdx = limit;
+      while (splitIdx > 0) {
+        const charAtSplit = t[splitIdx];
+        const charBeforeSplit = t[splitIdx - 1];
+        
+        if (!CANNOT_START_LINE.has(charAtSplit) && !LEADING_VOWELS.has(charBeforeSplit)) {
+          break;
+        }
+        splitIdx--;
+      }
+      
+      if (splitIdx === 0) {
+        splitIdx = limit + 1;
+        while (splitIdx < t.length) {
+          const charAtSplit = t[splitIdx];
+          const charBeforeSplit = t[splitIdx - 1];
+          if (!CANNOT_START_LINE.has(charAtSplit) && !LEADING_VOWELS.has(charBeforeSplit)) {
+            break;
+          }
+          splitIdx++;
+        }
+      }
+      
+      if (splitIdx >= t.length || splitIdx === 0) {
+        splitIdx = limit;
+      }
+      
+      const left = t.substring(0, splitIdx).trim();
+      const right = t.substring(splitIdx).trim();
+      return left + '\n' + thaiWrapLine(right, limit);
+    };
+
+    return thaiWrapLine(text, maxChars);
+  };
+
+  const renderHighlightedText = (text) => {
+    if (!text) return null;
+    
+    // Auto tag keywords if no brackets are present
+    let processedText = text;
+    if (!text.includes('[') && !text.includes(']')) {
+      const THAI_EMOTIONAL_KEYWORDS = [
+        "เจ็บปวด", "ความรัก", "คิดถึงเธอ", "ร้องไห้",
+        "ความจริง", "คนเดียว", "เสียใจ", "รักเธอ", "ห่วงหา", "ไม่รัก",
+        "คิดถึง", "เหนื่อย", "น้ำตา", "รัก", "เจ็บ", "รอ", "ลืม", "เหงา", 
+        "กอด", "ใจ", "ทิ้ง", "พัง", "จบ"
+      ];
+      // Find the first match
+      for (const kw of THAI_EMOTIONAL_KEYWORDS) {
+        if (text.includes(kw)) {
+          processedText = text.replace(kw, `[${kw}]`);
+          break; // Wrap only the first match
+        }
+      }
+    }
+    
+    // Parse brackets and render as styled spans
+    const parts = processedText.split(/\[(.*?)\]/g);
+    
+    const highlightColor = quoteOverlay.highlight_color || '#ff007a';
+    const highlightScale = quoteOverlay.highlight_scale !== undefined ? quoteOverlay.highlight_scale : 1.25;
+    
+    return parts.map((part, idx) => {
+      // Odd indices are the bracket contents (emphasized words)
+      if (idx % 2 === 1) {
+        return (
+          <span 
+            key={idx} 
+            className="font-bold inline-block mx-0.5"
+            style={{ 
+              fontSize: `${highlightScale}em`,
+              color: highlightColor,
+              textShadow: `0 0 10px ${highlightColor}66, 2px 2px 4px rgba(0,0,0,0.8)`
+            }}
+          >
+            {part}
+          </span>
+        );
+      }
+      return <span key={idx}>{part}</span>;
+    });
+  };
+
   const getCssFilter = (filterName) => {
     switch (filterName) {
       case 'vintage':
@@ -738,6 +1116,16 @@ export default function Home() {
   };
 
   const currentBg = getCurrentTrackBackground();
+
+  const activeTrack = tracks[currentTrackIndex];
+  const relativeTime = activeTrack && activeTrack.use_hook 
+    ? currentTime - (activeTrack.hook_start || 0) 
+    : currentTime;
+  const activeSub = subtitles.find(s => {
+    const startVal = parseFloat(s.start);
+    const endVal = parseFloat(s.end);
+    return !isNaN(startVal) && !isNaN(endVal) && startVal <= relativeTime && relativeTime <= endVal;
+  });
 
   return (
     <div className="flex-1 flex flex-row min-h-screen bg-[#0a0b0e] text-[#ededed] overflow-hidden select-none">
@@ -972,7 +1360,13 @@ export default function Home() {
                     style={{
                       fontFamily: fontFamily === 'Noto Sans Thai' 
                         ? 'var(--font-noto-sans-thai), sans-serif' 
-                        : 'var(--font-inter), var(--font-sarabun), sans-serif',
+                        : (fontFamily === 'was@kaikhiea'
+                          ? 'was@kaikhiea, var(--font-sarabun), sans-serif'
+                          : (fontFamily === 'Mali'
+                            ? 'var(--font-mali), var(--font-sarabun), sans-serif'
+                            : (fontFamily === 'Sarabun'
+                              ? 'var(--font-sarabun), sans-serif'
+                              : 'var(--font-inter), var(--font-sarabun), sans-serif'))),
                       fontSize: titleFontSize === 'Small' ? '2.8cqw' : (titleFontSize === 'Large' ? '4.8cqw' : '3.8cqw'),
                       textShadow: '3px 4px 6px rgba(0, 0, 0, 0.8), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
                     }}
@@ -983,6 +1377,62 @@ export default function Home() {
               </div>
 
    
+              {/* Subtitle/Lyrics Live Overlay */}
+              {activeSub && (
+                <div 
+                  className="absolute z-30 text-center transform -translate-x-1/2 pointer-events-none select-none px-4 py-1 max-w-[85%] break-words"
+                  style={{
+                    left: '50%',
+                    width: '85%',
+                    top: `${subtitleSettings.position_y * 100}%`,
+                    fontFamily: subtitleSettings.font_family === 'was@kaikhiea'
+                      ? 'was@kaikhiea, var(--font-sarabun), sans-serif'
+                      : (subtitleSettings.font_family === 'Mali' 
+                        ? 'var(--font-mali), var(--font-sarabun), sans-serif' 
+                        : (subtitleSettings.font_family === 'Sarabun'
+                          ? 'var(--font-sarabun), sans-serif'
+                          : (subtitleSettings.font_family === 'Noto Sans Thai'
+                            ? 'var(--font-noto-sans-thai), sans-serif'
+                            : 'var(--font-inter), var(--font-sarabun), sans-serif'))),
+                    fontSize: subtitleSettings.font_size === 'Small' ? '2.4cqw' : (subtitleSettings.font_size === 'Large' ? '4.4cqw' : '3.4cqw'),
+                    color: subtitleSettings.color,
+                    WebkitTextStroke: `${subtitleSettings.outline_width}px ${subtitleSettings.outline_color}`,
+                    textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
+                    backgroundColor: subtitleSettings.show_background_box ? subtitleSettings.background_box_color : 'transparent',
+                    borderRadius: '0.5cqw',
+                    whiteSpace: 'pre-line'
+                  }}
+                >
+                  {autoWrapText(activeSub.text, subtitleSettings.font_size)}
+                </div>
+              )}
+
+              {/* Quote/Status Live Overlay */}
+              {quoteOverlay.enabled && quoteOverlay.text && (
+                <div 
+                  className="absolute z-30 text-center transform -translate-x-1/2 pointer-events-none select-none text-white px-4 max-w-[85%] break-words"
+                  style={{
+                    left: '50%',
+                    width: '85%',
+                    top: `${quoteOverlay.position_y * 100}%`,
+                    fontFamily: subtitleSettings.font_family === 'was@kaikhiea'
+                      ? 'was@kaikhiea, var(--font-sarabun), sans-serif'
+                      : (subtitleSettings.font_family === 'Mali' 
+                        ? 'var(--font-mali), var(--font-sarabun), sans-serif' 
+                        : (subtitleSettings.font_family === 'Sarabun'
+                          ? 'var(--font-sarabun), sans-serif'
+                          : (subtitleSettings.font_family === 'Noto Sans Thai'
+                            ? 'var(--font-noto-sans-thai), sans-serif'
+                            : 'var(--font-inter), var(--font-sarabun), sans-serif'))),
+                    fontSize: subtitleSettings.font_size === 'Small' ? '2.2cqw' : (subtitleSettings.font_size === 'Large' ? '4.0cqw' : '3.0cqw'),
+                    textShadow: '2px 2px 4px rgba(0, 0, 0, 0.8), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000',
+                    whiteSpace: 'pre-line'
+                  }}
+                >
+                  {renderHighlightedText(autoWrapText(quoteOverlay.text, subtitleSettings.font_size, true))}
+                </div>
+              )}
+
               {/* Active Canvas Visualizer Overlay */}
               {activeBg && (
                 <CanvasVisualizer 
@@ -1477,237 +1927,683 @@ export default function Home() {
         {/* Right Column (Visualizer & Output Sidebar Settings) */}
         <div className="lg:col-span-4 flex flex-col gap-6">
           
-          {/* EXPORT FORMAT SETTINGS CARD */}
-          <div className="glass-panel rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-4 border-b border-white/[0.04] pb-3">
-              <Sliders className="w-5 h-5 text-[#ff007a]" />
-              <h3 className="font-semibold text-sm">Export Settings</h3>
-            </div>
+          {/* TAB SWITCHER */}
+          <div className="flex gap-2 p-1 bg-[#181922] border border-white/[0.04] rounded-xl">
+            <button 
+              onClick={() => setActiveTab('settings')}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'settings' ? 'bg-[#ff007a] text-white shadow-md shadow-[#ff007a]/20' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+            >
+              Settings
+            </button>
+            <button 
+              onClick={() => setActiveTab('subtitles')}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'subtitles' ? 'bg-[#ff007a] text-white shadow-md shadow-[#ff007a]/20' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+            >
+              Lyrics & Subtitles
+            </button>
+          </div>
 
-            {/* Resolution Selector */}
-            <div className="mb-4">
-              <label className="text-xs text-white/50 block mb-2 font-medium">RESOLUTION</label>
-              <div className="flex flex-col gap-2">
+          {activeTab === 'settings' ? (
+            <>
+              {/* EXPORT FORMAT SETTINGS CARD */}
+              <div className="glass-panel rounded-2xl p-5">
+                <div className="flex items-center gap-2 mb-4 border-b border-white/[0.04] pb-3">
+                  <Sliders className="w-5 h-5 text-[#ff007a]" />
+                  <h3 className="font-semibold text-sm">Export Settings</h3>
+                </div>
+
+                {/* Resolution Selector */}
+                <div className="mb-4">
+                  <label className="text-xs text-white/50 block mb-2 font-medium">RESOLUTION</label>
+                  <div className="flex flex-col gap-2">
+                    <div>
+                      <span className="text-[10px] text-white/30 block mb-1 font-semibold">HORIZONTAL (16:9)</span>
+                      <div className="grid grid-cols-3 gap-2">
+                        {['HD', '2K', '4K'].map((res) => (
+                          <button 
+                            key={res}
+                            onClick={() => setResolution(res)}
+                            className={`py-2 rounded-lg text-xs font-semibold border transition-all focus:outline-none ${resolution === res ? 'bg-[#ff007a] border-[#ff007a] text-white shadow-lg shadow-[#ff007a]/20' : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'}`}
+                          >
+                            {res}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-white/30 block mb-1 font-semibold">VERTICAL (9:16)</span>
+                      <div className="grid grid-cols-3 gap-2">
+                        {['Vertical HD', 'Vertical 2K', 'Vertical 4K'].map((res) => (
+                          <button 
+                            key={res}
+                            onClick={() => setResolution(res)}
+                            className={`py-2 rounded-lg text-xs font-semibold border transition-all focus:outline-none ${resolution === res ? 'bg-[#8b5cf6] border-[#8b5cf6] text-white shadow-lg shadow-[#8b5cf6]/20' : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'}`}
+                          >
+                            {res.replace('Vertical ', '')}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Frame Rate Selector */}
                 <div>
-                  <span className="text-[10px] text-white/30 block mb-1 font-semibold">HORIZONTAL (16:9)</span>
-                  <div className="grid grid-cols-3 gap-2">
-                    {['HD', '2K', '4K'].map((res) => (
+                  <label className="text-xs text-white/50 block mb-2 font-medium">FRAME RATE</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[24, 30].map((rate) => (
                       <button 
-                        key={res}
-                        onClick={() => setResolution(res)}
-                        className={`py-2 rounded-lg text-xs font-semibold border transition-all focus:outline-none ${resolution === res ? 'bg-[#ff007a] border-[#ff007a] text-white shadow-lg shadow-[#ff007a]/20' : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'}`}
+                        key={rate}
+                        onClick={() => setFps(rate)}
+                        className={`py-2.5 rounded-lg border transition-all flex flex-col items-center justify-center ${fps === rate ? 'bg-[#ff007a] border-[#ff007a] text-white' : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'}`}
                       >
-                        {res}
+                        <span className="text-xs font-semibold">{rate} fps</span>
+                        <span className="text-[9px] opacity-40">{rate === 24 ? 'Faster Encode' : 'High Quality'}</span>
                       </button>
                     ))}
                   </div>
                 </div>
-                <div>
-                  <span className="text-[10px] text-white/30 block mb-1 font-semibold">VERTICAL (9:16)</span>
-                  <div className="grid grid-cols-3 gap-2">
-                    {['Vertical HD', 'Vertical 2K', 'Vertical 4K'].map((res) => (
+
+                {/* Font Family Selector */}
+                <div className="mt-4 pt-4 border-t border-white/[0.04]">
+                  <label className="text-xs text-white/50 block mb-2 font-medium">FONT FAMILY</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { value: 'Inter', label: 'Inter' },
+                      { value: 'Noto Sans Thai', label: 'Noto Sans' },
+                      { value: 'Mali', label: 'Mali (ลายมือ)' },
+                      { value: 'Sarabun', label: 'Sarabun' },
+                      { value: 'was@kaikhiea', label: 'was@kaikhiea' }
+                    ].map((font) => (
                       <button 
-                        key={res}
-                        onClick={() => setResolution(res)}
-                        className={`py-2 rounded-lg text-xs font-semibold border transition-all focus:outline-none ${resolution === res ? 'bg-[#8b5cf6] border-[#8b5cf6] text-white shadow-lg shadow-[#8b5cf6]/20' : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'}`}
+                        key={font.value}
+                        onClick={() => setFontFamily(font.value)}
+                        className={`py-2 rounded-lg text-xs font-semibold border transition-all ${fontFamily === font.value ? 'bg-[#ff007a] border-[#ff007a] text-white' : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'} ${font.value === 'was@kaikhiea' ? 'col-span-2 font-mono' : ''}`}
                       >
-                        {res.replace('Vertical ', '')}
+                        {font.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Song Title Size Selector */}
+                <div className="mt-4 pt-4 border-t border-white/[0.04]">
+                  <label className="text-xs text-white/50 block mb-2 font-medium">SONG TITLE SIZE</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {['Small', 'Medium', 'Large'].map((sz) => (
+                      <button 
+                        key={sz}
+                        onClick={() => setTitleFontSize(sz)}
+                        className={`py-2 rounded-lg text-xs font-semibold border transition-all ${titleFontSize === sz ? 'bg-[#ff007a] border-[#ff007a] text-white' : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'}`}
+                      >
+                        {sz}
                       </button>
                     ))}
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Frame Rate Selector */}
-            <div>
-              <label className="text-xs text-white/50 block mb-2 font-medium">FRAME RATE</label>
-              <div className="grid grid-cols-2 gap-2">
-                {[24, 30].map((rate) => (
-                  <button 
-                    key={rate}
-                    onClick={() => setFps(rate)}
-                    className={`py-2.5 rounded-lg border transition-all flex flex-col items-center justify-center ${fps === rate ? 'bg-[#ff007a] border-[#ff007a] text-white' : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'}`}
-                  >
-                    <span className="text-xs font-semibold">{rate} fps</span>
-                    <span className="text-[9px] opacity-40">{rate === 24 ? 'Faster Encode' : 'High Quality'}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Font Family Selector */}
-            <div className="mt-4 pt-4 border-t border-white/[0.04]">
-              <label className="text-xs text-white/50 block mb-2 font-medium">FONT FAMILY</label>
-              <div className="grid grid-cols-2 gap-2">
-                {['Inter', 'Noto Sans Thai'].map((font) => (
-                  <button 
-                    key={font}
-                    onClick={() => setFontFamily(font)}
-                    className={`py-2 rounded-lg text-xs font-semibold border transition-all ${fontFamily === font ? 'bg-[#ff007a] border-[#ff007a] text-white' : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'}`}
-                  >
-                    {font}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Song Title Size Selector */}
-            <div className="mt-4 pt-4 border-t border-white/[0.04]">
-              <label className="text-xs text-white/50 block mb-2 font-medium">SONG TITLE SIZE</label>
-              <div className="grid grid-cols-3 gap-2">
-                {['Small', 'Medium', 'Large'].map((sz) => (
-                  <button 
-                    key={sz}
-                    onClick={() => setTitleFontSize(sz)}
-                    className={`py-2 rounded-lg text-xs font-semibold border transition-all ${titleFontSize === sz ? 'bg-[#ff007a] border-[#ff007a] text-white' : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'}`}
-                  >
-                    {sz}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* VISUALIZER STYLE SELECTION */}
-          <div className="glass-panel rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-4 border-b border-white/[0.04] pb-3">
-              <Video className="w-5 h-5 text-[#ff007a]" />
-              <h3 className="font-semibold text-sm">Visualizer Style</h3>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                'Waveform', 'Spectrum Bars', 'Circular Pulse', 'Particle Burst', 
-                'Geometric', 'Minimal Lines', 'Shockwave', 'Galaxy Vortex'
-              ].map((style) => (
-                <button 
-                  key={style}
-                  onClick={() => setVisStyle(style)}
-                  className={`py-3 px-2 rounded-xl text-[11px] font-semibold border transition-all text-left flex items-center justify-between ${visStyle === style ? 'bg-white/5 border-[#ff007a] text-white ring-2 ring-[#ff007a]/10' : 'bg-white/[0.01] border-white/5 text-white/50 hover:bg-white/5 hover:text-white/80'}`}
-                >
-                  <span>{style}</span>
-                  {visStyle === style && <span className="w-1.5 h-1.5 rounded-full bg-[#ff007a]" />}
-                </button>
-              ))}
-            </div>
-
-            {/* Visualizer Opacity Slider */}
-            <div className="mt-4 pt-4 border-t border-white/[0.04]">
-              <div className="flex justify-between items-center mb-1.5">
-                <span className="text-xs text-white/50 font-medium">VISUALIZER OPACITY</span>
-                <span className="text-xs font-bold text-[#ff007a] tabular-nums">{Math.round(visOpacity * 100)}%</span>
-              </div>
-              <input 
-                type="range" 
-                min="0.1" 
-                max="1.0" 
-                step="0.05" 
-                value={visOpacity} 
-                onChange={(e) => setVisOpacity(parseFloat(e.target.value))}
-                className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#ff007a]"
-              />
-            </div>
-
-            {/* Visualizer Height & Y-Position Sliders */}
-            <div className="mt-4 pt-4 border-t border-white/[0.04] flex flex-col gap-4">
-              <div>
-                <div className="flex justify-between items-center mb-1.5">
-                  <span className="text-xs text-white/50 font-medium">VISUALIZER SIZE (HEIGHT)</span>
-                  <span className="text-xs font-bold text-[#ff007a] tabular-nums">{Math.round(visHeight * 100)}%</span>
+              {/* VISUALIZER STYLE SELECTION */}
+              <div className="glass-panel rounded-2xl p-5">
+                <div className="flex items-center gap-2 mb-4 border-b border-white/[0.04] pb-3">
+                  <Video className="w-5 h-5 text-[#ff007a]" />
+                  <h3 className="font-semibold text-sm">Visualizer Style</h3>
                 </div>
-                <input 
-                  type="range" 
-                  min="0.05" 
-                  max="0.40" 
-                  step="0.01" 
-                  value={visHeight} 
-                  onChange={(e) => setVisHeight(parseFloat(e.target.value))}
-                  className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#ff007a]"
-                />
-              </div>
 
-              <div>
-                <div className="flex justify-between items-center mb-1.5">
-                  <span className="text-xs text-white/50 font-medium">VISUALIZER POSITION (Y-POS)</span>
-                  <span className="text-xs font-bold text-[#ff007a] tabular-nums">{Math.round(visYPos * 100)}%</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    'Waveform', 'Spectrum Bars', 'Circular Pulse', 'Particle Burst', 
+                    'Geometric', 'Minimal Lines', 'Shockwave', 'Galaxy Vortex'
+                  ].map((style) => (
+                    <button 
+                      key={style}
+                      onClick={() => setVisStyle(style)}
+                      className={`py-3 px-2 rounded-xl text-[11px] font-semibold border transition-all text-left flex items-center justify-between ${visStyle === style ? 'bg-white/5 border-[#ff007a] text-white ring-2 ring-[#ff007a]/10' : 'bg-white/[0.01] border-white/5 text-white/50 hover:bg-white/5 hover:text-white/80'}`}
+                    >
+                      <span>{style}</span>
+                      {visStyle === style && <span className="w-1.5 h-1.5 rounded-full bg-[#ff007a]" />}
+                    </button>
+                  ))}
                 </div>
-                <input 
-                  type="range" 
-                  min="0.50" 
-                  max="0.95" 
-                  step="0.01" 
-                  value={visYPos} 
-                  onChange={(e) => setVisYPos(parseFloat(e.target.value))}
-                  className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#ff007a]"
-                />
+
+                {/* Visualizer Opacity Slider */}
+                <div className="mt-4 pt-4 border-t border-white/[0.04]">
+                  <div className="flex justify-between items-center mb-1.5">
+                    <span className="text-xs text-white/50 font-medium">VISUALIZER OPACITY</span>
+                    <span className="text-xs font-bold text-[#ff007a] tabular-nums">{Math.round(visOpacity * 100)}%</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="0.1" 
+                    max="1.0" 
+                    step="0.05" 
+                    value={visOpacity} 
+                    onChange={(e) => setVisOpacity(parseFloat(e.target.value))}
+                    className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#ff007a]"
+                  />
+                </div>
+
+                {/* Visualizer Height & Y-Position Sliders */}
+                <div className="mt-4 pt-4 border-t border-white/[0.04] flex flex-col gap-4">
+                  <div>
+                    <div className="flex justify-between items-center mb-1.5">
+                      <span className="text-xs text-white/50 font-medium">VISUALIZER SIZE (HEIGHT)</span>
+                      <span className="text-xs font-bold text-[#ff007a] tabular-nums">{Math.round(visHeight * 100)}%</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="0.05" 
+                      max="0.40" 
+                      step="0.01" 
+                      value={visHeight} 
+                      onChange={(e) => setVisHeight(parseFloat(e.target.value))}
+                      className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#ff007a]"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-1.5">
+                      <span className="text-xs text-white/50 font-medium">VISUALIZER POSITION (Y-POS)</span>
+                      <span className="text-xs font-bold text-[#ff007a] tabular-nums">{Math.round(visYPos * 100)}%</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="0.50" 
+                      max="0.95" 
+                      step="0.01" 
+                      value={visYPos} 
+                      onChange={(e) => setVisYPos(parseFloat(e.target.value))}
+                      className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#ff007a]"
+                    />
+                  </div>
+                </div>
               </div>
-          </div>
 
-          {/* COLOR THEME PANEL */}
-          <div className="glass-panel rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-4 border-b border-white/[0.04] pb-3">
-              <Palette className="w-5 h-5 text-[#ff007a]" />
-              <h3 className="font-semibold text-sm">Color Theme</h3>
-            </div>
+              {/* COLOR THEME PANEL */}
+              <div className="glass-panel rounded-2xl p-5">
+                <div className="flex items-center gap-2 mb-4 border-b border-white/[0.04] pb-3">
+                  <Palette className="w-5 h-5 text-[#ff007a]" />
+                  <h3 className="font-semibold text-sm">Color Theme</h3>
+                </div>
 
-            {/* Custom Color Selector */}
-            <div className="mb-4">
-              <label className="text-xs text-white/50 block mb-2 font-medium">Custom Color</label>
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/5">
-                <input 
-                  type="color" 
-                  value={customColor || '#FFFFFF'} 
-                  onChange={(e) => {
-                    setCustomColor(e.target.value);
-                    setColorTheme('');
-                  }}
-                  className="w-10 h-10 rounded-lg overflow-hidden border-0 bg-transparent cursor-pointer"
-                />
+                {/* Custom Color Selector */}
+                <div className="mb-4">
+                  <label className="text-xs text-white/50 block mb-2 font-medium">Custom Color</label>
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                    <input 
+                      type="color" 
+                      value={customColor || '#FFFFFF'} 
+                      onChange={(e) => {
+                        setCustomColor(e.target.value);
+                        setColorTheme('');
+                      }}
+                      className="w-10 h-10 rounded-lg overflow-hidden border-0 bg-transparent cursor-pointer"
+                    />
+                    <div>
+                      <p className="text-xs font-semibold">Custom Tint</p>
+                      <p className="text-[9px] text-white/40">{customColor ? customColor.toUpperCase() : 'NO CUSTOM COLOR'}</p>
+                    </div>
+                    {customColor && (
+                      <button 
+                        onClick={() => setCustomColor('')}
+                        className="ml-auto text-xs text-white/30 hover:text-white/60 p-1"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Color Presets */}
                 <div>
-                  <p className="text-xs font-semibold">Custom Tint</p>
-                  <p className="text-[9px] text-white/40">{customColor ? customColor.toUpperCase() : 'NO CUSTOM COLOR'}</p>
+                  <label className="text-xs text-white/50 block mb-2 font-medium">OR CHOOSE A PRESET</label>
+                  <div className="flex flex-col gap-1.5">
+                    {Object.entries(THEME_COLORS).map(([name, hex]) => (
+                      <button 
+                        key={name}
+                        onClick={() => {
+                          setColorTheme(name);
+                          setCustomColor('');
+                        }}
+                        className={`flex items-center justify-between p-2.5 rounded-lg border text-xs transition-all ${colorTheme === name ? 'bg-white/5 border-[#ff007a] text-white' : 'bg-white/[0.01] border-white/5 text-white/50 hover:bg-white/5 hover:text-white/80'}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: hex }} />
+                          <span>{name}</span>
+                        </div>
+                        {colorTheme === name && <span className="text-[10px] text-[#ff007a] font-bold">Selected</span>}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                {customColor && (
-                  <button 
-                    onClick={() => setCustomColor('')}
-                    className="ml-auto text-xs text-white/30 hover:text-white/60 p-1"
-                  >
-                    Clear
-                  </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* SUBTITLES TAB CONTENT */}
+              <div className="glass-panel rounded-2xl p-5 flex flex-col gap-5">
+                {/* Check constraint: Hook Mode or Single Song */}
+                {!(tracks.some(t => t.use_hook) || tracks.length === 1) ? (
+                  <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold text-amber-300">ระบบซับไตเติลและเนื้อเพลง ถูกจำกัดการใช้งาน:</span> 
+                      <p className="mt-1 opacity-90 leading-relaxed">ฟีเจอร์นี้รองรับเฉพาะในโหมด Hook (ท่อนฮุค 30 วินาที) หรือโหมด Single (เพลงเดี่ยว 1 เพลง) เท่านั้น กรุณาตั้งค่าท่อนฮุคหรือลบเพลงในเพลย์ลิสต์ให้เหลือเพลงเดี่ยว</p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* OpenRouter API Key Input */}
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="text-xs text-white/50 font-medium">OPENROUTER API KEY</label>
+                        <a 
+                          href="https://openrouter.ai/keys" 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="text-[10px] text-[#ff007a] hover:underline"
+                        >
+                          รับ API Key
+                        </a>
+                      </div>
+                      <input 
+                        type="password" 
+                        placeholder="sk-or-v1-..."
+                        value={openrouterApiKey}
+                        onChange={(e) => {
+                          setOpenrouterApiKey(e.target.value);
+                          localStorage.setItem('openrouter_api_key', e.target.value);
+                        }}
+                        className="w-full px-3 py-2 text-xs rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-[#ff007a]"
+                      />
+                      <span className="text-[9px] text-white/30 mt-1 block">API Key นี้เก็บอย่างปลอดภัยในเบราว์เซอร์ของคุณ</span>
+                    </div>
+
+                    <div className="border-t border-white/[0.04] pt-4 flex flex-col gap-3">
+                      <span className="text-xs text-white/50 font-semibold">นำเข้าเนื้อเพลง & จัดเรียงเวลา</span>
+                      
+                      {/* AI Auto Transcribe button */}
+                      <button 
+                        onClick={handleAiTranscribe}
+                        disabled={isTranscribing}
+                        className="w-full py-2.5 text-xs font-semibold rounded-xl bg-gradient-to-r from-[#ff007a] to-[#d60067] hover:from-[#ff1a88] text-white transition-all flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50 animate-pulse-subtle"
+                      >
+                        {isTranscribing ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>เอไอกำลังแกะเนื้อร้อง... (Gemini)</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>AI Auto-Transcribe (แกะเนื้ออัตโนมัติ)</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Manual subtitle file import & export */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="relative">
+                          <input 
+                            type="file" 
+                            accept=".srt,.ass"
+                            onChange={handleSubtitleImport}
+                            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer hover:bg-white/5 transition-all"
+                          />
+                          <button className="w-full py-2 text-[11px] font-semibold rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white text-center transition-all">
+                            นำเข้าไฟล์ (.SRT / .ASS)
+                          </button>
+                        </div>
+                        <button 
+                          onClick={handleSubtitleExport}
+                          className="w-full py-2 text-[11px] font-semibold rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white text-center transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>ส่งออกไฟล์ (.SRT)</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Timeline Editor */}
+                    <div className="border-t border-white/[0.04] pt-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs text-white/50 font-semibold">แก้ไขท่อนร้อง & เวลา</span>
+                        <button 
+                          onClick={addSubLine}
+                          className="px-2 py-1 text-[10px] font-semibold text-[#ff007a] border border-[#ff007a]/30 rounded-lg hover:bg-[#ff007a]/5 active:scale-95 transition-all"
+                        >
+                          + เพิ่มแถวร้อง
+                        </button>
+                      </div>
+
+                      <div className="max-h-72 overflow-y-auto flex flex-col gap-1.5 pr-1 select-text">
+                        {subtitles.length > 0 ? (
+                          subtitles.map((sub, idx) => (
+                             <div key={idx} className="flex items-center gap-1.5 p-1.5 rounded-lg bg-white/[0.02] border border-white/5 text-xs">
+                              {/* Start Time Wrapper */}
+                              <div className="flex items-center gap-0.5 bg-black/40 border border-white/10 rounded px-1">
+                                <input 
+                                  type="text" 
+                                  placeholder="Start"
+                                  value={sub.start} 
+                                  onChange={(e) => updateSub(idx, 'start', e.target.value)}
+                                  className="w-10 text-center py-1 bg-transparent border-0 text-[10px] text-white focus:outline-none focus:ring-0"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    updateSub(idx, 'start', Number(getOverallCurrentTime().toFixed(1)));
+                                  }}
+                                  className="p-0.5 text-white/40 hover:text-[#ff007a] transition-all cursor-pointer flex items-center"
+                                  title="ดึงเวลาปัจจุบัน"
+                                >
+                                  <Clock className="w-3 h-3" />
+                                </button>
+                              </div>
+                              
+                              <span className="text-white/30 text-[9px]">-</span>
+                              
+                              {/* End Time Wrapper */}
+                              <div className="flex items-center gap-0.5 bg-black/40 border border-white/10 rounded px-1">
+                                <input 
+                                  type="text" 
+                                  placeholder="End"
+                                  value={sub.end} 
+                                  onChange={(e) => updateSub(idx, 'end', e.target.value)}
+                                  className="w-10 text-center py-1 bg-transparent border-0 text-[10px] text-white focus:outline-none focus:ring-0"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    updateSub(idx, 'end', Number(getOverallCurrentTime().toFixed(1)));
+                                  }}
+                                  className="p-0.5 text-white/40 hover:text-[#ff007a] transition-all cursor-pointer flex items-center"
+                                  title="ดึงเวลาปัจจุบัน"
+                                >
+                                  <Clock className="w-3 h-3" />
+                                </button>
+                              </div>
+                              
+                              <textarea 
+                                value={sub.text} 
+                                onChange={(e) => updateSub(idx, 'text', e.target.value)}
+                                rows={sub.text.includes('\n') ? 2 : 1}
+                                className="flex-1 min-w-0 px-1.5 py-1 bg-black/40 border border-white/10 rounded text-[11px] text-white resize-none align-middle focus:outline-none focus:border-[#ff007a]/50"
+                                placeholder="พิมพ์เนื้อเพลง..."
+                                onKeyDown={(e) => { if (e.key === 'Enter') e.stopPropagation(); }}
+                              />
+                              <button 
+                                type="button"
+                                onClick={() => removeSub(idx)}
+                                className="p-1 rounded text-white/30 hover:text-red-400 hover:bg-red-500/10 cursor-pointer"
+                                title="ลบแถว"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="py-6 text-center text-[10px] text-white/30 border border-dashed border-white/5 rounded-xl bg-white/[0.01]">
+                            ยังไม่มีเนื้อเพลงในระบบ
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Quote / Status Overlay Settings */}
+                    <div className="border-t border-white/[0.04] pt-4 flex flex-col gap-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-xs text-white/70 font-semibold block">สเตตัส / คำคม</span>
+                          <span className="text-[10px] text-white/30 block">แสดงด้านบนกึ่งกลางของจอภาพ</span>
+                        </div>
+                        <input 
+                          type="checkbox" 
+                          checked={quoteOverlay.enabled}
+                          onChange={(e) => setQuoteOverlay(prev => ({ ...prev, enabled: e.target.checked }))}
+                          className="w-4 h-4 accent-[#ff007a] cursor-pointer"
+                        />
+                      </div>
+
+                      {quoteOverlay.enabled && (
+                        <>
+                          <div>
+                            <label className="text-[10px] text-white/50 block mb-1">ข้อความคำคม</label>
+                            <textarea 
+                              placeholder="ตัวอย่าง: เจ็บที่สุดคือการอยู่ แต่ไม่มีความหมาย..."
+                              value={quoteOverlay.text}
+                              onChange={(e) => setQuoteOverlay(prev => ({ ...prev, text: e.target.value }))}
+                              rows={2}
+                              className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-[#ff007a] resize-none"
+                            />
+                          </div>
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <label className="text-[10px] text-white/50 block">ตำแหน่งแนวตั้ง (Y-POS)</label>
+                              <span className="text-[10px] font-bold text-[#ff007a] tabular-nums">{Math.round(quoteOverlay.position_y * 100)}%</span>
+                            </div>
+                            <input 
+                              type="range" 
+                              min="0.05" 
+                              max="0.40" 
+                              step="0.01" 
+                              value={quoteOverlay.position_y} 
+                              onChange={(e) => setQuoteOverlay(prev => ({ ...prev, position_y: parseFloat(e.target.value) }))}
+                              className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#ff007a]"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-[10px] text-white/50 block mb-1">สีเน้นคำ (Highlight)</label>
+                              <div className="flex items-center gap-2 px-2 py-1 bg-white/5 border border-white/10 rounded-lg">
+                                <input 
+                                  type="color" 
+                                  value={quoteOverlay.highlight_color || '#ff007a'} 
+                                  onChange={(e) => setQuoteOverlay(prev => ({ ...prev, highlight_color: e.target.value }))}
+                                  className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
+                                />
+                                <span className="text-[10px] font-mono">{(quoteOverlay.highlight_color || '#ff007a').toUpperCase()}</span>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-white/50 block mb-1">ขนาดคำเน้น (Scale)</label>
+                              <select 
+                                value={quoteOverlay.highlight_scale !== undefined ? quoteOverlay.highlight_scale : 1.25}
+                                onChange={(e) => setQuoteOverlay(prev => ({ ...prev, highlight_scale: parseFloat(e.target.value) }))}
+                                className="w-full px-2 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-white cursor-pointer"
+                              >
+                                <option value="1.1" className="bg-[#181922] text-white">1.10 เท่า</option>
+                                <option value="1.2" className="bg-[#181922] text-white">1.20 เท่า</option>
+                                <option value="1.25" className="bg-[#181922] text-white">1.25 เท่า</option>
+                                <option value="1.35" className="bg-[#181922] text-white">1.35 เท่า</option>
+                                <option value="1.5" className="bg-[#181922] text-white">1.50 เท่า</option>
+                              </select>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Subtitle Font Styles */}
+                    <div className="border-t border-white/[0.04] pt-4 flex flex-col gap-4">
+                      <span className="text-xs text-white/50 font-semibold">ปรับแต่งรูปแบบตัวอักษร</span>
+
+                      {/* Font Family Dropdown */}
+                      <div>
+                        <label className="text-[10px] text-white/50 block mb-1">แบบฟอนต์ (Font Family)</label>
+                        <select 
+                          value={subtitleSettings.font_family}
+                          onChange={(e) => setSubtitleSettings(prev => ({ ...prev, font_family: e.target.value }))}
+                          className="w-full px-2 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-white cursor-pointer"
+                        >
+                          <option value="was@kaikhiea" className="bg-[#181922] text-white">was@kaikhiea (ฟอนต์เขียนมือ)</option>
+                          <option value="Mali" className="bg-[#181922] text-white">Mali (ลายมือสุดชิค)</option>
+                          <option value="Sarabun" className="bg-[#181922] text-white">Sarabun (ทางการเรียบร้อย)</option>
+                          <option value="Noto Sans Thai" className="bg-[#181922] text-white">Noto Sans Thai (ทันสมัยไม่มีหัว)</option>
+                          <option value="Inter" className="bg-[#181922] text-white">Inter (ภาษาอังกฤษสากล)</option>
+                        </select>
+                      </div>
+
+                      {/* Size, Color, Outline Width & Color */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] text-white/50 block mb-1">ขนาดอักษร</label>
+                          <select 
+                            value={subtitleSettings.font_size}
+                            onChange={(e) => setSubtitleSettings(prev => ({ ...prev, font_size: e.target.value }))}
+                            className="w-full px-2 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-white cursor-pointer"
+                          >
+                            <option value="Small" className="bg-[#181922] text-white">เล็ก (Small)</option>
+                            <option value="Medium" className="bg-[#181922] text-white">กลาง (Medium)</option>
+                            <option value="Large" className="bg-[#181922] text-white">ใหญ่ (Large)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-white/50 block mb-1">ลักษณะเอฟเฟกต์</label>
+                          <select 
+                            value={subtitleSettings.effect}
+                            onChange={(e) => setSubtitleSettings(prev => ({ ...prev, effect: e.target.value }))}
+                            className="w-full px-2 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-white cursor-pointer"
+                          >
+                            <option value="Static Shadow" className="bg-[#181922] text-white">Static (เงาเรียบง่าย)</option>
+                            <option value="Karaoke Highlight" className="bg-[#181922] text-white">Karaoke (ไฮไลท์คำ)</option>
+                            <option value="Karaoke Glow" className="bg-[#181922] text-white">Glow (เรืองแสงคาราโอเกะ)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[10px] text-white/50 block mb-1">สีตัวอักษร</label>
+                          <div className="flex items-center gap-2 px-2 py-1 bg-white/5 border border-white/10 rounded-lg">
+                            <input 
+                              type="color" 
+                              value={subtitleSettings.color} 
+                              onChange={(e) => setSubtitleSettings(prev => ({ ...prev, color: e.target.value }))}
+                              className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
+                            />
+                            <span className="text-[10px] font-mono">{subtitleSettings.color.toUpperCase()}</span>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-white/50 block mb-1">สีเส้นขอบ</label>
+                          <div className="flex items-center gap-2 px-2 py-1 bg-white/5 border border-white/10 rounded-lg">
+                            <input 
+                              type="color" 
+                              value={subtitleSettings.outline_color} 
+                              onChange={(e) => setSubtitleSettings(prev => ({ ...prev, outline_color: e.target.value }))}
+                              className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
+                            />
+                            <span className="text-[10px] font-mono">{subtitleSettings.outline_color.toUpperCase()}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="text-[10px] text-white/50">ขนาดขอบ</label>
+                            <span className="text-[10px] font-bold text-[#ff007a]">{subtitleSettings.outline_width}px</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max="5" 
+                            step="1" 
+                            value={subtitleSettings.outline_width} 
+                            onChange={(e) => setSubtitleSettings(prev => ({ ...prev, outline_width: parseInt(e.target.value) }))}
+                            className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#ff007a]"
+                          />
+                        </div>
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="text-[10px] text-white/50">ตำแหน่งแนวตั้ง (Y)</label>
+                            <span className="text-[10px] font-bold text-[#ff007a]">{Math.round(subtitleSettings.position_y * 100)}%</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="0.50" 
+                            max="0.95" 
+                            step="0.01" 
+                            value={subtitleSettings.position_y} 
+                            onChange={(e) => setSubtitleSettings(prev => ({ ...prev, position_y: parseFloat(e.target.value) }))}
+                            className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#ff007a]"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Background Box Option */}
+                      <div className="border-t border-white/[0.04] pt-3 flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-white/70 font-semibold">กล่องพื้นหลังซับไตเติล (Background Box)</span>
+                          <input 
+                            type="checkbox" 
+                            checked={subtitleSettings.show_background_box}
+                            onChange={(e) => setSubtitleSettings(prev => ({ ...prev, show_background_box: e.target.checked }))}
+                            className="w-4 h-4 accent-[#ff007a] cursor-pointer"
+                          />
+                        </div>
+                        {subtitleSettings.show_background_box && (
+                          <div className="flex items-center justify-between gap-3 px-2 py-1 bg-[#181922] border border-white/10 rounded-lg">
+                            <span className="text-[10px] text-white/50">สีพื้นหลังกล่อง (โปร่งแสง)</span>
+                            <div className="flex items-center gap-2">
+                              <input 
+                                type="color" 
+                                value={subtitleSettings.background_box_color.substring(0, 7)} 
+                                onChange={(e) => setSubtitleSettings(prev => ({ ...prev, background_box_color: e.target.value + '80' }))}
+                                className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
+                              />
+                              <span className="text-[10px] font-mono">{subtitleSettings.background_box_color.toUpperCase()}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Step 2: Burn Subtitles controls */}
+                    <div className="border-t border-white/[0.04] pt-4 mt-2">
+                      <div className="p-3 bg-white/[0.02] border border-white/5 rounded-2xl flex flex-col gap-2">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-white">
+                          <span className="w-5 h-5 rounded-full bg-[#ff007a]/20 text-[#ff007a] flex items-center justify-center text-[10px]">2</span>
+                          <span>ขั้นตอนที่ 2: ฝังซับไตเติลลงวิดีโอ</span>
+                        </div>
+                        <p className="text-[10px] text-white/40 leading-relaxed">หลังจาก Export วิดีโอหลัก (แบบไม่มีซับ) เรียบร้อยแล้ว สามารถกดปุ่มนี้เพื่อฝังซับไตเติลลงวิดีโอทันทีโดยไม่ต้องเรนเดอร์ภาพใหม่ ใช้เวลาเพียง 5-10 วินาที</p>
+                        
+                        <button 
+                          onClick={handleBurnSubtitles}
+                          disabled={isBurning || !exportState.output_video}
+                          className="mt-1 w-full py-2.5 text-xs font-bold rounded-xl bg-white border border-[#ff007a] hover:bg-[#ff007a]/10 text-[#ff007a] hover:text-white transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          {isBurning ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>กำลังฝังซับลงในวิดีโอ...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Download className="w-3.5 h-3.5" />
+                              <span>ฝังซับไตเติลและบันทึกวิดีโอ</span>
+                            </>
+                          )}
+                        </button>
+                        {!exportState.output_video && (
+                          <span className="text-[9px] text-rose-400 text-center font-medium block">โปรด Export วิดีโอในขั้นตอนแรกก่อน</span>
+                        )}
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
-            </div>
-
-            {/* Color Presets */}
-            <div>
-              <label className="text-xs text-white/50 block mb-2 font-medium">OR CHOOSE A PRESET</label>
-              <div className="flex flex-col gap-1.5">
-                {Object.entries(THEME_COLORS).map(([name, hex]) => (
-                  <button 
-                    key={name}
-                    onClick={() => {
-                      setColorTheme(name);
-                      setCustomColor('');
-                    }}
-                    className={`flex items-center justify-between p-2.5 rounded-lg border text-xs transition-all ${colorTheme === name ? 'bg-white/5 border-[#ff007a] text-white' : 'bg-white/[0.01] border-white/5 text-white/50 hover:bg-white/5 hover:text-white/80'}`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: hex }} />
-                      <span>{name}</span>
-                    </div>
-                    {colorTheme === name && <span className="text-[10px] text-[#ff007a] font-bold">Selected</span>}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+            </>
+          )}
 
         </div>
 
       </div>
-
-    </div>
 
       {/* DYNAMIC METRIC FOOTER BAR */}
       <footer className="mt-6 pt-4 border-t border-white/[0.04] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white/30">
@@ -1762,7 +2658,7 @@ export default function Home() {
                 
                 {/* Video Link */}
                 <a 
-                  href={musicApi.getBaseUrl() + exportState.output_video}
+                  href={`${musicApi.getBaseUrl()}${exportState.output_video}?t=${Date.now()}`}
                   download
                   className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all text-xs font-semibold text-white/90 border border-white/5"
                 >
@@ -1775,7 +2671,7 @@ export default function Home() {
 
                 {/* Timeline Link */}
                 <a 
-                  href={musicApi.getBaseUrl() + exportState.output_timeline}
+                  href={`${musicApi.getBaseUrl()}${exportState.output_timeline}?t=${Date.now()}`}
                   download
                   className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all text-xs font-semibold text-white/80 border border-white/5"
                 >
@@ -1788,7 +2684,7 @@ export default function Home() {
 
                 {/* Song List Link */}
                 <a 
-                  href={musicApi.getBaseUrl() + exportState.output_songlist}
+                  href={`${musicApi.getBaseUrl()}${exportState.output_songlist}?t=${Date.now()}`}
                   download
                   className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-all text-xs font-semibold text-white/80 border border-white/5"
                 >

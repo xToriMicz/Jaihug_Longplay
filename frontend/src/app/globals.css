@@ -114,3 +114,17 @@ input[type="range"]::-webkit-slider-thumb {
 input[type="range"]::-webkit-slider-thumb:hover {
   transform: scale(1.3);
 }
+
+@font-face {
+  font-family: 'was@kaikhiea';
+  src: url('/fonts/was@kaikhieaSB.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'was@kaikhiea';
+  src: url('/fonts/was@kaikhieaBold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+}

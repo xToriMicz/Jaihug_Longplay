@@ -5,7 +5,8 @@ import logging
 import subprocess
 import threading
 import unicodedata
-from typing import List, Dict, Any
+import shutil
+from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, File, UploadFile, Form, BackgroundTasks, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +14,9 @@ from pydantic import BaseModel
 
 from modules.audio_merger import get_audio_info
 from modules.video_creator import create_longplay_video
+from modules.subtitle_parser import parse_srt, parse_ass
+from modules.lyrics_transcriber import transcribe_audio_lyrics
+from modules.subtitle_burner import burn_subtitles_to_video
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -72,6 +76,9 @@ class EditorState(BaseModel):
     backgrounds: List[Dict[str, Any]]
     active_background: str
     settings: Dict[str, Any]
+    subtitles: Optional[List[Dict[str, Any]]] = []
+    quote_overlay: Optional[Dict[str, Any]] = {}
+    subtitle_settings: Optional[Dict[str, Any]] = {}
 
 def load_default_state() -> Dict[str, Any]:
     return {
@@ -263,7 +270,54 @@ def run_export_pipeline(state_data: Dict[str, Any]):
         color_theme = settings.get("custom_color") or settings.get("color_theme", "Lo-fi / Chill")
         
         # Outputs
-        output_filename = f"longplay_{uuid.uuid4().hex[:6]}.mp4"
+        import datetime
+        import re
+        
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        num_songs = len(tracks)
+        
+        if num_songs == 1:
+            t = tracks[0]
+            filename = t.get("filename") or os.path.basename(t.get("filepath", "song"))
+            track_name = os.path.splitext(filename)[0]
+            # Strip 8-hex-char prefix and underscore if present
+            if re.match(r'^[a-f0-9]{8}_', track_name):
+                track_name = track_name[9:]
+                
+            sanitized_track_name = "".join(
+                c for c in track_name 
+                if c.isalnum() or unicodedata.category(c).startswith('M') or c in ("-", "_", " ")
+            ).strip()
+            sanitized_track_name = sanitized_track_name.replace(" ", "_")
+            sanitized_track_name = re.sub(r'__+', '_', sanitized_track_name)
+            sanitized_track_name = re.sub(r'--+', '-', sanitized_track_name)
+            sanitized_track_name = sanitized_track_name[:50].strip("_")
+            
+            if t.get("use_hook"):
+                try:
+                    hook_dur = int(round(float(t.get("hook_duration", 30))))
+                except (ValueError, TypeError):
+                    hook_dur = 30
+                output_filename = f"Hook_{hook_dur}S_{sanitized_track_name}_{timestamp}.mp4"
+            else:
+                output_filename = f"Single_{sanitized_track_name}_{timestamp}.mp4"
+        else:
+            has_hooks = any(t.get("use_hook") for t in tracks)
+            if has_hooks:
+                hook_dur = 30
+                for t in tracks:
+                    if t.get("use_hook") and t.get("hook_duration") is not None:
+                        try:
+                            hook_dur = int(round(float(t["hook_duration"])))
+                            break
+                        except (ValueError, TypeError):
+                            continue
+                output_filename = f"Hook_Mix_{hook_dur}s_{num_songs}song_{timestamp}.mp4"
+            else:
+                output_filename = f"LongPlay_{num_songs}Song_{timestamp}.mp4"
+            
+        base_filename = f"base_{output_filename}"
+        base_path = os.path.join(OUTPUT_DIR, base_filename)
         output_path = os.path.join(OUTPUT_DIR, output_filename)
         
         total_duration = max(1.0, sum(t.get("duration", 0.0) for t in tracks))
@@ -276,7 +330,7 @@ def run_export_pipeline(state_data: Dict[str, Any]):
                 render_start_time[0] = time.time()
                 
             elapsed = time.time() - render_start_time[0]
-            percent = 10.0 + (ratio * 85.0)
+            percent = 10.0 + (ratio * 80.0)  # Reserve 5% for subtitles
             
             eta_msg = ""
             if ratio > 0.01:
@@ -304,7 +358,7 @@ def run_export_pipeline(state_data: Dict[str, Any]):
         create_longplay_video(
             audio_files=audio_files,
             background_media=bg_abs_path,
-            output_path=output_path,
+            output_path=base_path,
             style=settings.get("visualizer_style", "Spectrum Bars"),
             color_theme=color_theme,
             resolution=res_val,
@@ -324,6 +378,57 @@ def run_export_pipeline(state_data: Dict[str, Any]):
             background_filter=settings.get("background_filter", "none")
         )
         
+        # Burn subtitles if present
+        with progress_lock:
+            export_progress["progress"] = 92.0
+            export_progress["step"] = "กำลังวาดซับไตเติลและข้อความคำคม..."
+            
+        subtitles_list = state_data.get("subtitles", [])
+        quote_overlay = state_data.get("quote_overlay", {})
+        sub_settings = state_data.get("subtitle_settings", {})
+        
+        has_subs = len(subtitles_list) > 0
+        has_quote = quote_overlay.get("enabled") and quote_overlay.get("text", "").strip()
+        
+        if has_subs or has_quote:
+            logger.info("Subtitles/Quotes found in state. Burning subtitles into base video...")
+            burn_subtitles_to_video(
+                base_video_path=base_path,
+                output_video_path=output_path,
+                subtitles=subtitles_list,
+                quote_overlay=quote_overlay,
+                settings=sub_settings,
+                temp_dir=TEMP_DIR,
+                resolution=res_val,
+                total_duration=total_duration
+            )
+        else:
+            # If no subtitles/quotes, simply copy base video to final output_path
+            logger.info("No subtitles/quotes in state. Copying base video to final path...")
+            shutil.copy(base_path, output_path)
+            
+        # Rename base timeline/songlist to final timeline/songlist
+        base_timeline = os.path.splitext(base_path)[0] + "_Timeline.txt"
+        base_songlist = os.path.splitext(base_path)[0] + "_SongList.txt"
+        final_timeline = os.path.splitext(output_path)[0] + "_Timeline.txt"
+        final_songlist = os.path.splitext(output_path)[0] + "_SongList.txt"
+        
+        if os.path.exists(base_timeline):
+            if os.path.exists(final_timeline):
+                try:
+                    os.remove(final_timeline)
+                except Exception:
+                    pass
+            os.rename(base_timeline, final_timeline)
+            
+        if os.path.exists(base_songlist):
+            if os.path.exists(final_songlist):
+                try:
+                    os.remove(final_songlist)
+                except Exception:
+                    pass
+            os.rename(base_songlist, final_songlist)
+            
         # Output URLs
         video_url = f"/output/{output_filename}"
         timeline_url = f"/output/{os.path.splitext(output_filename)[0]}_Timeline.txt"
@@ -459,6 +564,150 @@ def delete_project(name: str):
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Error deleting project {clean_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class TranscribeRequest(BaseModel):
+    filepath: str
+    api_key: str
+    use_hook: bool = False
+    hook_start: float = 0.0
+    hook_duration: float = 30.0
+
+class BurnRequest(BaseModel):
+    base_video_filename: str
+    subtitles: List[Dict[str, Any]]
+    quote_overlay: Dict[str, Any]
+    subtitle_settings: Dict[str, Any]
+
+@app.post("/api/subtitles/parse")
+async def parse_subtitle_file(file: UploadFile = File(...)):
+    filename = file.filename.lower()
+    content = (await file.read()).decode("utf-8", errors="ignore")
+    
+    if filename.endswith(".srt"):
+        parsed = parse_srt(content)
+    elif filename.endswith(".ass") or filename.endswith(".ssa"):
+        parsed = parse_ass(content)
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported subtitle format. Only .srt and .ass are supported.")
+        
+    return {"subtitles": parsed}
+
+@app.post("/api/subtitles/transcribe")
+def transcribe_lyrics(req: TranscribeRequest):
+    rel_path = req.filepath.lstrip("/")
+    abs_path = os.path.join(BASE_DIR, rel_path)
+    
+    if not os.path.exists(abs_path):
+        raise HTTPException(status_code=404, detail=f"Audio file not found: {req.filepath}")
+        
+    target_path = abs_path
+    temp_trim_file = None
+    
+    if req.use_hook:
+        temp_filename = f"trim_transcribe_{uuid.uuid4().hex[:8]}.mp3"
+        temp_trim_file = os.path.join(TEMP_DIR, temp_filename)
+        logger.info(f"Trimming audio for transcription: {abs_path} from {req.hook_start}s for {req.hook_duration}s")
+        
+        trim_cmd = [
+            "ffmpeg", "-y",
+            "-ss", str(req.hook_start),
+            "-t", str(req.hook_duration),
+            "-i", abs_path,
+            "-acodec", "libmp3lame",
+            "-b:a", "128k",
+            temp_trim_file
+        ]
+        try:
+            subprocess.run(trim_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            target_path = temp_trim_file
+        except Exception as err:
+            logger.error(f"Failed to trim audio for transcription: {err}")
+            raise HTTPException(status_code=500, detail=f"FFmpeg trim failed: {str(err)}")
+            
+    try:
+        subtitles = transcribe_audio_lyrics(
+            audio_path=target_path,
+            api_key=req.api_key,
+            temp_dir=TEMP_DIR
+        )
+        return {"subtitles": subtitles}
+    except Exception as e:
+        logger.error(f"Transcription failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if temp_trim_file and os.path.exists(temp_trim_file):
+            try:
+                os.remove(temp_trim_file)
+            except Exception:
+                pass
+
+@app.post("/api/subtitles/burn")
+def burn_subtitles(req: BurnRequest):
+    base_path = os.path.join(OUTPUT_DIR, req.base_video_filename)
+    if not os.path.exists(base_path):
+        raise HTTPException(status_code=404, detail="Base video not found.")
+        
+    output_filename = req.base_video_filename
+    if output_filename.startswith("base_"):
+        output_filename = output_filename[5:]
+    else:
+        base_filename = f"base_{output_filename}"
+        new_base_path = os.path.join(OUTPUT_DIR, base_filename)
+        if not os.path.exists(new_base_path):
+            shutil.move(base_path, new_base_path)
+        base_path = new_base_path
+        
+    output_path = os.path.join(OUTPUT_DIR, output_filename)
+    
+    total_duration = 36000.0
+    try:
+        cmd = [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            base_path
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.returncode == 0 and res.stdout.strip():
+            total_duration = float(res.stdout.strip())
+    except Exception as e:
+        logger.warning(f"Failed to get video duration: {e}")
+        
+    resolution = (1920, 1080)
+    try:
+        cmd = [
+            "ffprobe", "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=width,height",
+            "-of", "csv=s=x:p=0",
+            base_path
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.returncode == 0 and res.stdout.strip():
+            w_h = res.stdout.strip().split('x')
+            if len(w_h) == 2:
+                resolution = (int(w_h[0]), int(w_h[1]))
+    except Exception as e:
+        logger.warning(f"Failed to get video resolution: {e}")
+        
+    try:
+        burn_subtitles_to_video(
+            base_video_path=base_path,
+            output_video_path=output_path,
+            subtitles=req.subtitles,
+            quote_overlay=req.quote_overlay,
+            settings=req.subtitle_settings,
+            temp_dir=TEMP_DIR,
+            resolution=resolution,
+            total_duration=total_duration
+        )
+        return {
+            "status": "success",
+            "output_video": f"/output/{output_filename}"
+        }
+    except Exception as e:
+        logger.error(f"Burn subtitles failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

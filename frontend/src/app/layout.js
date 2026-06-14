@@ -1,4 +1,4 @@
-import { Inter, Noto_Sans_Thai, Sarabun } from "next/font/google";
+import { Inter, Noto_Sans_Thai, Sarabun, Mali } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({
@@ -18,6 +18,12 @@ const sarabun = Sarabun({
   subsets: ["thai", "latin"],
 });
 
+const mali = Mali({
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-mali",
+  subsets: ["thai", "latin"],
+});
+
 export const metadata = {
   title: "Music Longplay - Visualizer Creator",
   description: "Create premium visualizer videos for long-form music playlists",
@@ -27,7 +33,7 @@ export default function RootLayout({ children }) {
   return (
     <html
       lang="th"
-      className={`${inter.variable} ${notoSansThai.variable} ${sarabun.variable} h-full antialiased`}
+      className={`${inter.variable} ${notoSansThai.variable} ${sarabun.variable} ${mali.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

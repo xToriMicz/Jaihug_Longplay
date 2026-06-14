@@ -117,7 +117,9 @@ def get_font(text: str, bold: bool, size: int, fonts_dir: str, font_family: str 
         "Noto Sans Thai": ("NotoSansThai-Bold.ttf", "NotoSansThai-Regular.ttf"),
         "Mali": ("Mali-Bold.ttf", "Mali-Regular.ttf"),
         "Sarabun": ("Sarabun-Bold.ttf", "Sarabun-Regular.ttf"),
-        "IBM Plex Sans Thai": ("IBMPlexSansThai-Bold.ttf", "IBMPlexSansThai-Regular.ttf")
+        "IBM Plex Sans Thai": ("IBMPlexSansThai-Bold.ttf", "IBMPlexSansThai-Regular.ttf"),
+        "was@kaikhiea": ("was@kaikhieaBold.ttf", "was@kaikhieaSB.ttf"),
+        "waskaikhiea": ("waskaikhieaBold.ttf", "waskaikhieaSB.ttf")
     }
     
     # Resolve default / unsupported fonts
