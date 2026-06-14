@@ -88,6 +88,7 @@ export default function Home() {
   const [showExportModal, setShowExportModal] = useState(false);
 
   const isInitialLoad = useRef(true);
+  const lastSyncedTrackRef = useRef({ id: null, use_hook: null, filepath: null });
 
   const updateTrackBackground = (trackId, bgPath) => {
     setTracks(prev => prev.map(t => t.id === trackId ? { ...t, background: bgPath } : t));
@@ -623,6 +624,14 @@ export default function Home() {
       setCurrentTime(startPos);
       audio.src = musicApi.getBaseUrl() + tracks[index].filepath;
       audio.currentTime = startPos;
+      
+      // Update sync ref immediately to prevent pause-reset bug!
+      lastSyncedTrackRef.current = {
+        id: tracks[index].id,
+        use_hook: tracks[index].use_hook,
+        filepath: tracks[index].filepath
+      };
+      
       audio.play().then(() => {
         setIsPlaying(true);
         startProgressTracker();
@@ -674,17 +683,29 @@ export default function Home() {
       const activeTrack = tracks[currentTrackIndex] || tracks[0];
       const targetSrc = musicApi.getBaseUrl() + activeTrack.filepath;
       
-      if (!audioRef.current.src || !audioRef.current.src.endsWith(activeTrack.filepath)) {
-        audioRef.current.src = targetSrc;
-      }
+      const trackChanged = lastSyncedTrackRef.current.id !== activeTrack.id ||
+                           lastSyncedTrackRef.current.filepath !== activeTrack.filepath;
+      const hookToggled = lastSyncedTrackRef.current.use_hook !== activeTrack.use_hook;
       
-      if (activeTrack.use_hook) {
-        const startPos = activeTrack.hook_start || 0;
-        audioRef.current.currentTime = startPos;
-        setCurrentTime(startPos);
-      } else {
-        audioRef.current.currentTime = 0;
-        setCurrentTime(0);
+      if (trackChanged || hookToggled) {
+        if (!audioRef.current.src || !audioRef.current.src.endsWith(activeTrack.filepath)) {
+          audioRef.current.src = targetSrc;
+        }
+        
+        if (activeTrack.use_hook) {
+          const startPos = activeTrack.hook_start || 0;
+          audioRef.current.currentTime = startPos;
+          setCurrentTime(startPos);
+        } else {
+          audioRef.current.currentTime = 0;
+          setCurrentTime(0);
+        }
+        
+        lastSyncedTrackRef.current = {
+          id: activeTrack.id,
+          use_hook: activeTrack.use_hook,
+          filepath: activeTrack.filepath
+        };
       }
     }
   }, [tracks, isPlaying, currentTrackIndex]);
