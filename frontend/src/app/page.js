@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, Pause, Plus, Trash2, Sliders, Palette, Video, Music, Image as ImageIcon,
   ChevronRight, Save, Download, RotateCcw, AlertCircle, Sparkles, Loader2, ArrowRight, Volume2,
-  FolderOpen, Check, Clock
+  FolderOpen, Check, Clock, FileText
 } from 'lucide-react';
 import { musicApi } from '../lib/api';
 import CanvasVisualizer, { getHexColor, THEME_COLORS } from '../components/canvas_visualizer';
@@ -35,6 +35,10 @@ export default function Home() {
   const [fontFamily, setFontFamily] = useState('Inter');
   const [titleFontSize, setTitleFontSize] = useState('Medium');
   const [autoBurnSubtitles, setAutoBurnSubtitles] = useState(false);
+  const [showLyricsModal, setShowLyricsModal] = useState(false);
+  const [rawLyricsText, setRawLyricsText] = useState('');
+  const [progressiveGap, setProgressiveGap] = useState(3.5);
+  const [lyricsImportMode, setLyricsImportMode] = useState('overwrite'); // 'overwrite' or 'append'
 
   const isVertical = resolution.includes('Vertical');
 
@@ -1079,6 +1083,61 @@ export default function Home() {
 
   const removeSub = (index) => {
     setSubtitles(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleGenerateSubtitlesFromLyrics = () => {
+    if (!rawLyricsText.trim()) {
+      alert("กรุณากรอกหรือวางเนื้อเพลงก่อน");
+      return;
+    }
+
+    const lines = rawLyricsText
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+
+    if (lines.length === 0) {
+      alert("ไม่พบข้อความเนื้อเพลงที่ใช้งานได้");
+      return;
+    }
+
+    let startOffset = 0.0;
+    if (lyricsImportMode === 'append' && subtitles.length > 0) {
+      const lastSub = subtitles[subtitles.length - 1];
+      startOffset = parseFloat(lastSub.end) || 0.0;
+    }
+
+    const generated = lines.map((lineText, index) => {
+      const start = startOffset + index * progressiveGap;
+      const end = startOffset + (index + 1) * progressiveGap;
+      return {
+        start: Number(start.toFixed(1)),
+        end: Number(end.toFixed(1)),
+        text: lineText
+      };
+    });
+
+    if (lyricsImportMode === 'overwrite') {
+      setSubtitles(generated);
+    } else {
+      setSubtitles(prev => [...prev, ...generated]);
+    }
+
+    // Reset fields and close modal
+    setRawLyricsText('');
+    setShowLyricsModal(false);
+  };
+
+  const handleLyricsFileImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target.result;
+      setRawLyricsText(content);
+    };
+    reader.readAsText(file);
   };
 
   const autoWrapText = (text, fontSizeStr = 'Medium', isQuote = false) => {
@@ -2444,6 +2503,15 @@ export default function Home() {
                         )}
                       </button>
 
+                      {/* Paste & Import raw lyrics */}
+                      <button 
+                        onClick={() => setShowLyricsModal(true)}
+                        className="w-full py-2.5 text-xs font-semibold rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer mt-0.5"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-[#ff007a]" />
+                        <span>ป้อนเนื้อร้องเอง (Paste & Import Lyrics)</span>
+                      </button>
+
                       {/* Manual subtitle file import & export */}
                       <div className="grid grid-cols-2 gap-2">
                         <div className="relative">
@@ -3083,6 +3151,116 @@ export default function Home() {
                 className="px-4 py-2 text-xs font-semibold rounded-lg bg-[#ff007a] hover:bg-[#d60067] text-white transition-all active:scale-95"
               >
                 ตกลง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LYRICS IMPORT & PASTE MODAL */}
+      {showLyricsModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-lg glass-panel rounded-2xl p-6 border border-white/10 flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/10">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <FileText className="w-5 h-5 text-[#ff007a]" />
+                <span>ป้อนเนื้อร้องและจัดเรียงแถวเอง</span>
+              </h3>
+              <button 
+                onClick={() => {
+                  setShowLyricsModal(false);
+                  setRawLyricsText('');
+                }}
+                className="text-xs text-white/40 hover:text-white/80 p-1"
+              >
+                ปิด
+              </button>
+            </div>
+
+            {/* Input Text Area */}
+            <div className="mb-4">
+              <label className="text-xs text-white/50 block mb-2 font-medium">วางเนื้อเพลงดิบที่นี่ (บรรทัดละ 1 วรรค)</label>
+              <textarea 
+                placeholder={`ตัวอย่าง:\nฉันเพิ่งเข้าใจในวันนี้\nว่าที่เธอเปลี่ยนไปไม่ใช่แค่คิดมาก\nคำว่ารักที่เธอพูดทุกวัน`}
+                value={rawLyricsText}
+                onChange={(e) => setRawLyricsText(e.target.value)}
+                rows={8}
+                className="w-full px-3 py-2.5 text-xs rounded-xl bg-black/40 border border-white/10 text-white focus:outline-none focus:border-[#ff007a] resize-y min-h-[140px] font-sans leading-relaxed"
+              />
+            </div>
+
+            {/* Drag & Drop / File Upload option */}
+            <div className="mb-4">
+              <label className="text-xs text-white/50 block mb-1.5 font-medium">หรือนำเข้าจากไฟล์ข้อความ (.TXT)</label>
+              <div className="relative flex items-center justify-center border border-dashed border-white/10 hover:border-white/20 transition-all rounded-xl p-3 bg-white/[0.01]">
+                <input 
+                  type="file" 
+                  accept=".txt"
+                  onChange={handleLyricsFileImport}
+                  className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+                />
+                <div className="text-[10px] text-white/40 flex items-center gap-2">
+                  <FolderOpen className="w-4 h-4 text-white/30" />
+                  <span>คลิกเพื่ออัปโหลดไฟล์เนื้อเพลง .txt</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Controls Layout */}
+            <div className="grid grid-cols-2 gap-4 mb-6 pt-3 border-t border-white/5">
+              {/* Progressive Gap Slider */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-[10px] text-white/50 font-medium">ระยะห่างประโยค (วินาที)</label>
+                  <span className="text-[10px] font-bold text-[#ff007a]">{progressiveGap}s</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="1.0" 
+                  max="10.0" 
+                  step="0.5" 
+                  value={progressiveGap} 
+                  onChange={(e) => setProgressiveGap(parseFloat(e.target.value))}
+                  className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#ff007a]"
+                />
+              </div>
+
+              {/* Import Mode Selector */}
+              <div>
+                <label className="text-[10px] text-white/50 block mb-1 font-medium">โหมดการเขียนข้อมูล</label>
+                <div className="grid grid-cols-2 gap-1 bg-[#181922] p-0.5 rounded-lg border border-white/5">
+                  <button 
+                    onClick={() => setLyricsImportMode('overwrite')}
+                    className={`py-1 text-[10px] font-semibold rounded transition-all ${lyricsImportMode === 'overwrite' ? 'bg-[#ff007a] text-white' : 'text-white/40 hover:text-white'}`}
+                  >
+                    เขียนทับเดิม
+                  </button>
+                  <button 
+                    onClick={() => setLyricsImportMode('append')}
+                    className={`py-1 text-[10px] font-semibold rounded transition-all ${lyricsImportMode === 'append' ? 'bg-[#ff007a] text-white' : 'text-white/40 hover:text-white'}`}
+                  >
+                    เพิ่มต่อท้าย
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 border-t border-white/5 pt-4">
+              <button 
+                onClick={() => {
+                  setShowLyricsModal(false);
+                  setRawLyricsText('');
+                }}
+                className="px-4 py-2 text-xs font-semibold rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-white transition-all cursor-pointer active:scale-95"
+              >
+                ยกเลิก
+              </button>
+              <button 
+                onClick={handleGenerateSubtitlesFromLyrics}
+                className="px-5 py-2 text-xs font-semibold rounded-lg bg-[#ff007a] hover:bg-[#d60067] text-white transition-all cursor-pointer active:scale-95 shadow-md shadow-[#ff007a]/20"
+              >
+                สร้างแถวร้องและจัดเรียงเวลา
               </button>
             </div>
           </div>
