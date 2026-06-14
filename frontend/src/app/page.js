@@ -1058,7 +1058,15 @@ export default function Home() {
   };
 
   const updateSub = (index, key, value) => {
-    setSubtitles(prev => prev.map((sub, idx) => idx === index ? { ...sub, [key]: value } : sub));
+    setSubtitles(prev => prev.map((sub, idx) => {
+      if (idx === index) {
+        return { ...sub, [key]: value };
+      }
+      if (key === 'end' && idx === index + 1) {
+        return { ...sub, start: value };
+      }
+      return sub;
+    }));
   };
 
   const addSubLine = () => {
