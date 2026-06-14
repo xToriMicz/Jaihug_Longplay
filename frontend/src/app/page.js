@@ -570,6 +570,15 @@ export default function Home() {
       setIsPlaying(false);
       clearInterval(progressInterval.current);
     } else {
+      const activeTrack = tracks[currentTrackIndex];
+      if (activeTrack && activeTrack.use_hook) {
+        const hStart = activeTrack.hook_start || 0;
+        const hEnd = hStart + (activeTrack.hook_duration || 30);
+        if (audio.currentTime < hStart || audio.currentTime >= hEnd) {
+          audio.currentTime = hStart;
+          setCurrentTime(hStart);
+        }
+      }
       audio.play().then(() => {
         setIsPlaying(true);
         startProgressTracker();
@@ -592,6 +601,15 @@ export default function Home() {
         setIsPlaying(false);
         clearInterval(progressInterval.current);
       } else {
+        const activeTrack = tracks[index];
+        if (activeTrack && activeTrack.use_hook) {
+          const hStart = activeTrack.hook_start || 0;
+          const hEnd = hStart + (activeTrack.hook_duration || 30);
+          if (audio.currentTime < hStart || audio.currentTime >= hEnd) {
+            audio.currentTime = hStart;
+            setCurrentTime(hStart);
+          }
+        }
         audio.play().then(() => {
           setIsPlaying(true);
           startProgressTracker();
@@ -617,9 +635,14 @@ export default function Home() {
     progressInterval.current = setInterval(() => {
       const audio = audioRef.current;
       if (audio) {
-        setCurrentTime(audio.currentTime);
-        // If track finished (either naturally or hook duration exceeded), play next
         const activeTrack = tracks[currentTrackIndexRef.current];
+        if (activeTrack && activeTrack.use_hook && audio.currentTime < (activeTrack.hook_start || 0)) {
+          audio.currentTime = activeTrack.hook_start || 0;
+        }
+        
+        setCurrentTime(audio.currentTime);
+        
+        // If track finished (either naturally or hook duration exceeded), play next
         const hasEnded = audio.ended || (
           activeTrack && 
           activeTrack.use_hook && 
@@ -642,17 +665,29 @@ export default function Home() {
 
   // Cleanup timers
   useEffect(() => {
-    const currentBg = getCurrentTrackBackground();
-
-  return () => clearInterval(progressInterval.current);
+    return () => clearInterval(progressInterval.current);
   }, []);
 
-  // Sync audio ref with first track
+  // Sync audio ref with active track when isPlaying is false
   useEffect(() => {
-    if (tracks.length > 0 && audioRef.current && !audioRef.current.src) {
-      audioRef.current.src = musicApi.getBaseUrl() + tracks[0].filepath;
+    if (tracks.length > 0 && audioRef.current && !isPlaying) {
+      const activeTrack = tracks[currentTrackIndex] || tracks[0];
+      const targetSrc = musicApi.getBaseUrl() + activeTrack.filepath;
+      
+      if (!audioRef.current.src || !audioRef.current.src.endsWith(activeTrack.filepath)) {
+        audioRef.current.src = targetSrc;
+      }
+      
+      if (activeTrack.use_hook) {
+        const startPos = activeTrack.hook_start || 0;
+        audioRef.current.currentTime = startPos;
+        setCurrentTime(startPos);
+      } else {
+        audioRef.current.currentTime = 0;
+        setCurrentTime(0);
+      }
     }
-  }, [tracks]);
+  }, [tracks, isPlaying, currentTrackIndex]);
 
   // Track progress calculations
   const formatTime = (seconds) => {
